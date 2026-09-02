@@ -2,4 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-exec cargo run --quiet --manifest-path "$script_dir/Cargo.toml" -p ahc-cli -- "$@"
+exec cargo run --quiet \
+  --manifest-path "$script_dir/Cargo.toml" \
+  --target-dir "$script_dir/target" \
+  -p ahc-cli -- "$@"
