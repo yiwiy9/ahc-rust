@@ -1,0 +1,11 @@
+/target/
+/.ahc/runtime/
+/contests/*/target/
+/contests/*/tools/target/
+/contests/*/tools/in/
+/contests/*/out/
+/contests/*/results/
+/contests/*/visualizations/
+/contests/*/snapshots/
+/contests/*/submit/
+.DS_Store

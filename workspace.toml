@@ -1,0 +1,2 @@
+search_roots = ["contests", "templates"]
+common_library_path = "../atcoder-lib"
