@@ -4,6 +4,7 @@
 
 ```sh
 cd ahc-rust
+./scripts/install-pahcer.sh # 初回だけ。事前に実行する
 ./ahc new ahc071
 cd contests/ahc071
 ./ahc doctor
@@ -37,14 +38,21 @@ cd contests/ahc071
 ```sh
 ./ahc run 0 --solver a
 ./ahc vis 0 --solver a --open
-./ahc bench --solver a --cases 10
-./ahc save greedy --solver a --cases 10
+./ahc bench --solver a --cases 10 --threads 4
+./ahc history --rank
+./ahc save greedy --solver a --cases 10 --threads 4
 ./ahc compare 1 2
 ./ahc export --solver a --clipboard
 ./ahc web --open
 ```
 
 `run` は毎回 `cargo build` を呼びますが、Cargoの差分ビルドを使います。コードを変えていない連続確認では `--no-build` を付けられます。
+
+`bench` はpahcerを使って並列実行します。配信と同時なら `--threads 4` など明示的に抑え、速度だけを測りたい時は `--threads 1` にします。pahcerは0点をWAとして扱うため、0点・負値が正常な問題や設定が合わない時は `--builtin` へ切り替えます。
+
+相対スコアの基準を固定してA/B比較する場合は `--freeze-best-scores`、保存済みの解同士を順位スコアで比べる場合は `./ahc history --rank` を使います。これはローカル履歴内の順位で、AtCoder順位ではありません。
+
+履歴を比較する時は `cases` と `threads` が同じ行だけを比べます。特に2ケースの試運転と100ケースの本計測を順位順に混ぜて解釈しないようにします。
 
 ## 時間探索を再現可能にする
 

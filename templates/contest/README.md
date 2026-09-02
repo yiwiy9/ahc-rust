@@ -15,9 +15,12 @@
 ```sh
 ./ahc doctor
 ./ahc run 0 --solver greedy
-./ahc bench --solver greedy --cases 10
-./ahc save greedy --solver greedy --cases 10
+./ahc bench --solver greedy --cases 10 --threads 4
+./ahc history --rank
+./ahc save greedy --solver greedy --cases 10 --threads 4
 ./ahc export --solver greedy --clipboard
 ```
+
+`bench` はpahcerで並列実行し、seedごとのローカルbestに対する相対値も保存します。0点・負値が正常な問題やpahcerで扱えない公式toolsでは `--builtin` を付けます。
 
 `src/bin/a.rs` は最初の提出入口です。試行錯誤が増えたら名前つきbinを追加し、`solutions/` とスナップショットを検索可能な履歴として残します。

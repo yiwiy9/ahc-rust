@@ -8,15 +8,19 @@
 
 ```bash
 ./ahc doctor
+./scripts/install-pahcer.sh # 初回だけ
 ./ahc new ahc071
 cd contests/ahc071
 ./ahc run 0 --solver greedy
-./ahc bench --solver greedy --cases 10
-./ahc save greedy --solver greedy --cases 10
+./ahc bench --solver greedy --cases 10 --threads 4
+./ahc history --rank
+./ahc save greedy --solver greedy --cases 10 --threads 4
 ./ahc add beam
 ./ahc export --solver greedy --clipboard
 ./ahc web --open
 ```
+
+`run` は1 seedのデバッグ、`bench` はworkspace-localのpahcerによる並列比較です。pahcerが扱えない得点形式や障害時には `bench --builtin` で逐次runnerへ戻れます。
 
 `cargo compete` と `oj` は使用しません。提出は `export` した単一RustファイルをWeb画面へコピーします。
 
@@ -46,4 +50,4 @@ ahc-workspace/
 
 ## グローバルへの影響
 
-このリポジトリはグローバルインストール、PATH変更、シェル設定変更を要求しません。`./ahc` はリポジトリ内のCLIをCargoで実行します。
+このリポジトリはグローバルインストール、PATH変更、シェル設定変更を要求しません。`./ahc` はリポジトリ内のCLIをCargoで実行し、pahcerも `.tools/` 内だけへ固定versionを入れます。

@@ -3,7 +3,7 @@
 ```text
 ahc-workspace/
 ├── ahc-rust/                 競技だけで完結するGitリポジトリ
-│   ├── crates/ahc-cli/       生成・実行・計測・保存・export
+│   ├── crates/ahc-cli/       生成・1 seed実行・計測adapter・保存・export
 │   ├── templates/            新しい問題へコピーする型
 │   ├── contests/ahc070/      問題固有コードと検索用の過去解
 │   └── docs/
@@ -29,5 +29,7 @@ ahc-workspace/
 - `framework/beam*.rs`: 候補の展開と枝刈り
 - `framework/local_search.rs`: 山登り・焼きなましの採否と時間管理
 - 各binのI/Oから探索エンジンを呼ぶ流れ
+
+多数seedの実行・相対評価・履歴はpahcerへ委譲し、`ahc-cli` は問題ごとの設定生成と共通JSONへの変換を担当します。pahcerに適合しない問題でもbuiltin runnerへ戻れるため、外部ツールが競技継続の必須条件にはなりません。
 
 抽象化の目的は全問題を同じStateで解くことではありません。探索ループのバグと問題固有ロジックのバグを分け、配信中に読む範囲を狭めることです。

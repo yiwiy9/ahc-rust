@@ -24,11 +24,14 @@
 ```sh
 ./ahc doctor
 ./ahc run 0
-./ahc bench --cases 10
-./ahc save rebuild-baseline --cases 10
+./ahc bench --cases 10 --threads 4 --comment contest-end
+./ahc history --rank
+./ahc save rebuild-baseline --cases 10 --threads 4
 ./ahc export --clipboard
 ./ahc serve
 ```
+
+`a`、`beam`、`sa_improved` を同じ `--cases` と `--threads` で順に計測すると、pahcerの相対スコアとローカル順位で比較できます。時間探索は並列数でも結果が変わるため、比較中は固定します。
 
 Web版ビジュアライザ: https://img.atcoder.jp/ahc070/f4sYgUzY.html?lang=ja
 

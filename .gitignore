@@ -1,4 +1,5 @@
 /target/
+/.tools/
 /.ahc/runtime/
 /contests/*/target/
 /contests/*/tools/target/

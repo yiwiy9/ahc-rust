@@ -69,12 +69,27 @@ enum Commands {
         #[arg(long)]
         no_build: bool,
     },
-    /// Run the same solver on seeds 0..cases and save deterministic JSON results.
+    /// Run the same solver on seeds 0..cases and save normalized JSON results.
     Bench {
         #[arg(long, default_value = "a")]
         solver: String,
         #[arg(long, default_value_t = 10)]
         cases: usize,
+        /// Use the simple sequential runner instead of workspace-local pahcer.
+        #[arg(long)]
+        builtin: bool,
+        /// Parallel workers for pahcer. 0 uses its physical-core default.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Evaluate against the local history by rank score.
+        #[arg(long)]
+        rank: bool,
+        /// Do not update pahcer's per-seed best scores.
+        #[arg(long)]
+        freeze_best_scores: bool,
+        /// Short experiment note stored with the measurement.
+        #[arg(short, long)]
+        comment: Option<String>,
     },
     /// Benchmark and save the complete current src directory as a snapshot.
     Save {
@@ -83,6 +98,19 @@ enum Commands {
         solver: String,
         #[arg(long, default_value_t = 10)]
         cases: usize,
+        /// Use the simple sequential runner instead of workspace-local pahcer.
+        #[arg(long)]
+        builtin: bool,
+        /// Parallel workers for pahcer. 0 uses its physical-core default.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+    },
+    /// Show pahcer's measurement history.
+    History {
+        #[arg(long)]
+        rank: bool,
+        #[arg(short, long, default_value_t = 10)]
+        number: usize,
     },
     /// List saved snapshots.
     List,
@@ -167,6 +195,8 @@ struct ContestConfig {
     score_direction: ScoreDirection,
     #[serde(default = "default_score_pattern")]
     score_pattern: String,
+    #[serde(default = "default_pahcer_score_pattern")]
+    pahcer_score_pattern: String,
     #[serde(default)]
     web_visualizer_url: Option<String>,
     #[serde(default)]
@@ -179,6 +209,10 @@ fn default_score_direction() -> ScoreDirection {
 
 fn default_score_pattern() -> String {
     r"Score\s*=\s*(-?[0-9]+)".to_string()
+}
+
+fn default_pahcer_score_pattern() -> String {
+    r"(?m)^\s*Score\s*=\s*(?P<score>\d+)\s*$".to_string()
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -196,6 +230,10 @@ struct CaseResult {
     output_path: String,
     log_path: String,
     visualization_path: Option<String>,
+    #[serde(default)]
+    relative_score: Option<f64>,
+    #[serde(default)]
+    error_message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,6 +249,95 @@ struct BenchmarkResult {
     maximum_score: i64,
     wall_time_milliseconds: u128,
     case_results: Vec<CaseResult>,
+    #[serde(default = "default_benchmark_runner")]
+    runner: String,
+    #[serde(default)]
+    score_mode: String,
+    #[serde(default)]
+    threads: usize,
+    #[serde(default)]
+    accepted_cases: usize,
+    #[serde(default)]
+    average_relative_score: Option<f64>,
+    #[serde(default)]
+    maximum_execution_milliseconds: Option<u128>,
+    #[serde(default)]
+    comment: String,
+    #[serde(default)]
+    source_result_path: Option<String>,
+}
+
+fn default_benchmark_runner() -> String {
+    "builtin".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct PahcerResult {
+    start_time: String,
+    case_count: usize,
+    total_score: i128,
+    total_relative_score: f64,
+    max_execution_time: f64,
+    comment: String,
+    wa_seeds: Vec<usize>,
+    cases: Vec<PahcerCaseResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PahcerCaseResult {
+    seed: usize,
+    score: i64,
+    relative_score: f64,
+    execution_time: f64,
+    error_message: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerConfigFile {
+    general: PahcerGeneralConfig,
+    problem: PahcerProblemConfig,
+    test: PahcerTestConfig,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerGeneralConfig {
+    version: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerProblemConfig {
+    problem_name: String,
+    objective: String,
+    score_regex: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerTestConfig {
+    start_seed: usize,
+    end_seed: usize,
+    threads: usize,
+    out_dir: String,
+    compile_steps: Vec<PahcerCompileStep>,
+    test_steps: Vec<PahcerTestStep>,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerCompileStep {
+    program: String,
+    args: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct PahcerTestStep {
+    program: String,
+    args: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stdin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stdout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stderr: Option<String>,
+    measure_time: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,10 +404,29 @@ fn main() -> Result<()> {
             print_case_result(&result);
             Ok(())
         }
-        Commands::Bench { solver, cases } => {
+        Commands::Bench {
+            solver,
+            cases,
+            builtin,
+            threads,
+            rank,
+            freeze_best_scores,
+            comment,
+        } => {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;
             let config = load_contest_config(&contest)?;
-            let result = benchmark(&contest, &config, &solver, cases)?;
+            let result = benchmark(
+                &root,
+                &contest,
+                &config,
+                &solver,
+                cases,
+                builtin,
+                threads,
+                rank,
+                freeze_best_scores,
+                comment.as_deref().unwrap_or(&solver),
+            )?;
             print_benchmark(&result);
             Ok(())
         }
@@ -288,10 +434,18 @@ fn main() -> Result<()> {
             name,
             solver,
             cases,
+            builtin,
+            threads,
         } => {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;
             let config = load_contest_config(&contest)?;
-            save_snapshot(&contest, &config, &name, &solver, cases)
+            save_snapshot(
+                &root, &contest, &config, &name, &solver, cases, builtin, threads,
+            )
+        }
+        Commands::History { rank, number } => {
+            let contest = resolve_contest(&root, cli.contest.as_deref())?;
+            show_pahcer_history(&root, &contest, rank, number)
         }
         Commands::List => {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;
@@ -432,6 +586,13 @@ fn doctor(root: &Path, requested_contest: Option<&str>) -> Result<()> {
             println!("  [not found] {command}");
         }
     }
+    let pahcer = pahcer_binary(root);
+    if pahcer.is_file() {
+        let version = command_version_at(&pahcer).unwrap_or_else(|| "installed".to_string());
+        println!("  [ok] pahcer: {version} (workspace-local)");
+    } else {
+        println!("  [not found] pahcer: run ./scripts/install-pahcer.sh");
+    }
 
     let config = workspace_config(root)?;
     println!();
@@ -474,6 +635,10 @@ fn doctor(root: &Path, requested_contest: Option<&str>) -> Result<()> {
 }
 
 fn command_version(command: &str) -> Option<String> {
+    command_version_at(Path::new(command))
+}
+
+fn command_version_at(command: &Path) -> Option<String> {
     let output = Command::new(command).arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
@@ -486,6 +651,10 @@ fn command_version(command: &str) -> Option<String> {
             .trim()
             .to_string(),
     )
+}
+
+fn pahcer_binary(root: &Path) -> PathBuf {
+    root.join(".tools/bin/pahcer")
 }
 
 fn command_exists(command: &str) -> bool {
@@ -939,6 +1108,8 @@ fn run_case_with_tools(
         output_path: relative_display(contest, &output),
         log_path: relative_display(contest, &log),
         visualization_path,
+        relative_score: None,
+        error_message: String::new(),
     })
 }
 
@@ -1000,15 +1171,47 @@ fn score_and_visualize(
     Ok((score, visualization_path))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn benchmark(
+    root: &Path,
     contest: &Path,
     config: &ContestConfig,
     solver: &str,
     cases: usize,
+    builtin: bool,
+    threads: usize,
+    rank: bool,
+    freeze_best_scores: bool,
+    comment: &str,
 ) -> Result<BenchmarkResult> {
     if cases == 0 {
         bail!("cases must be positive");
     }
+    validate_solver_name(solver)?;
+    if builtin {
+        benchmark_builtin(contest, config, solver, cases, comment)
+    } else {
+        benchmark_pahcer(
+            root,
+            contest,
+            config,
+            solver,
+            cases,
+            threads,
+            rank,
+            freeze_best_scores,
+            comment,
+        )
+    }
+}
+
+fn benchmark_builtin(
+    contest: &Path,
+    config: &ContestConfig,
+    solver: &str,
+    cases: usize,
+    comment: &str,
+) -> Result<BenchmarkResult> {
     let tools = build(contest, config, solver, false)?;
     let started = Instant::now();
     let mut results = Vec::with_capacity(cases);
@@ -1026,7 +1229,7 @@ fn benchmark(
     let minimum_score = results.iter().map(|result| result.score).min().unwrap();
     let maximum_score = results.iter().map(|result| result.score).max().unwrap();
     let result = BenchmarkResult {
-        schema_version: 1,
+        schema_version: 2,
         contest: config.contest_id.clone(),
         solver: solver.to_string(),
         created_at: now(),
@@ -1037,10 +1240,306 @@ fn benchmark(
         maximum_score,
         wall_time_milliseconds: started.elapsed().as_millis(),
         case_results: results,
+        runner: "builtin".to_string(),
+        score_mode: "raw".to_string(),
+        threads: 1,
+        accepted_cases: cases,
+        average_relative_score: None,
+        maximum_execution_milliseconds: None,
+        comment: comment.to_string(),
+        source_result_path: None,
     };
     save_benchmark(contest, &result)?;
     append_event(contest, "benchmark_completed", &result)?;
     Ok(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn benchmark_pahcer(
+    root: &Path,
+    contest: &Path,
+    config: &ContestConfig,
+    solver: &str,
+    cases: usize,
+    threads: usize,
+    rank: bool,
+    freeze_best_scores: bool,
+    comment: &str,
+) -> Result<BenchmarkResult> {
+    let pahcer = pahcer_binary(root);
+    if !pahcer.is_file() {
+        bail!(
+            "workspace-local pahcer was not found\nRun: {}/scripts/install-pahcer.sh\nOr use: ./ahc bench --builtin",
+            root.display()
+        );
+    }
+
+    let tools = build(contest, config, solver, false)?;
+    if tools.tester.is_none() && tools.visualizer.is_none() {
+        bail!("no official tester or visualizer was found; use ./ahc bench --builtin");
+    }
+
+    let pahcer_root = contest.join("results/pahcer");
+    let work_root = pahcer_root.join(format!("work/{solver}"));
+    if work_root.is_dir() {
+        fs::remove_dir_all(&work_root)?;
+    }
+    fs::create_dir_all(work_root.join("out"))?;
+    fs::create_dir_all(work_root.join("log"))?;
+    let config_path = pahcer_root.join("config.toml");
+    write_pahcer_config(
+        contest,
+        config,
+        solver,
+        cases,
+        threads,
+        &tools,
+        &config_path,
+    )?;
+
+    let started = Instant::now();
+    let mut command = Command::new(&pahcer);
+    command
+        .arg("run")
+        .arg("--no-compile")
+        .arg("--setting-file")
+        .arg(&config_path)
+        .arg("--comment")
+        .arg(comment)
+        .current_dir(contest);
+    if rank {
+        command.arg("--rank");
+    }
+    if freeze_best_scores {
+        command.arg("--freeze-best-scores");
+    }
+    run_checked(&mut command, "pahcer benchmark failed")?;
+    let wall_time_milliseconds = started.elapsed().as_millis();
+
+    let source_path = latest_pahcer_result(&pahcer_root.join("json"))?;
+    let source_text = fs::read_to_string(&source_path)?;
+    let source: PahcerResult = serde_json::from_str(&source_text)
+        .with_context(|| format!("failed to parse {}", source_path.display()))?;
+    if source.case_count == 0 || source.cases.is_empty() {
+        bail!("pahcer returned no cases");
+    }
+
+    let case_results = source
+        .cases
+        .into_iter()
+        .map(|case| {
+            let visualization = contest.join(format!(
+                "results/pahcer/work/{solver}/case/{:04}/vis.html",
+                case.seed
+            ));
+            CaseResult {
+                seed: case.seed,
+                score: case.score,
+                elapsed_milliseconds: seconds_to_milliseconds(case.execution_time),
+                output_path: format!("results/pahcer/work/{solver}/out/{:04}.txt", case.seed),
+                log_path: format!("results/pahcer/work/{solver}/log/{:04}.txt", case.seed),
+                visualization_path: visualization
+                    .is_file()
+                    .then(|| relative_display(contest, &visualization)),
+                relative_score: Some(case.relative_score),
+                error_message: case.error_message,
+            }
+        })
+        .collect::<Vec<_>>();
+    let minimum_score = case_results.iter().map(|case| case.score).min().unwrap();
+    let maximum_score = case_results.iter().map(|case| case.score).max().unwrap();
+    let average_score = source.total_score as f64 / source.case_count as f64;
+    let result = BenchmarkResult {
+        schema_version: 2,
+        contest: config.contest_id.clone(),
+        solver: solver.to_string(),
+        created_at: source.start_time,
+        cases: source.case_count,
+        total_score: source.total_score,
+        average_score,
+        minimum_score,
+        maximum_score,
+        wall_time_milliseconds,
+        case_results,
+        runner: "pahcer".to_string(),
+        score_mode: if rank { "rank" } else { "relative" }.to_string(),
+        threads,
+        accepted_cases: source.case_count.saturating_sub(source.wa_seeds.len()),
+        average_relative_score: Some(source.total_relative_score / source.case_count as f64),
+        maximum_execution_milliseconds: Some(seconds_to_milliseconds(source.max_execution_time)),
+        comment: source.comment,
+        source_result_path: Some(relative_display(contest, &source_path)),
+    };
+    save_benchmark(contest, &result)?;
+    append_event(contest, "benchmark_completed", &result)?;
+    Ok(result)
+}
+
+fn write_pahcer_config(
+    contest: &Path,
+    config: &ContestConfig,
+    solver: &str,
+    cases: usize,
+    threads: usize,
+    tools: &BuiltTools,
+    destination: &Path,
+) -> Result<()> {
+    let output = format!("./results/pahcer/work/{solver}/out/{{SEED04}}.txt");
+    let log = format!("./results/pahcer/work/{solver}/log/{{SEED04}}.txt");
+    let input = "./tools/in/{SEED04}.txt".to_string();
+    let solver_program = executable_for_config(contest, &tools.solver);
+    let workspace = find_workspace_root(contest).ok_or_else(|| {
+        anyhow!(
+            "AHC workspace marker was not found from {}",
+            contest.display()
+        )
+    })?;
+    let isolated_runner = workspace.join("scripts/run-isolated.sh");
+    if !isolated_runner.is_file() {
+        bail!(
+            "isolated runner was not found: {}",
+            isolated_runner.display()
+        );
+    }
+    let case_work = contest
+        .join(format!("results/pahcer/work/{solver}/case/{{SEED04}}"))
+        .display()
+        .to_string();
+    let mut test_steps = Vec::new();
+    if let Some(tester) = &tools.tester {
+        test_steps.push(PahcerTestStep {
+            program: isolated_runner.display().to_string(),
+            args: vec![
+                case_work,
+                tester.display().to_string(),
+                tools.solver.display().to_string(),
+            ],
+            stdin: Some(input),
+            stdout: Some(output),
+            stderr: Some(log),
+            measure_time: true,
+        });
+    } else {
+        test_steps.push(PahcerTestStep {
+            program: solver_program,
+            args: Vec::new(),
+            stdin: Some(input.clone()),
+            stdout: Some(output.clone()),
+            stderr: Some(log),
+            measure_time: true,
+        });
+        if let Some(visualizer) = &tools.visualizer {
+            test_steps.push(PahcerTestStep {
+                program: isolated_runner.display().to_string(),
+                args: vec![
+                    case_work,
+                    visualizer.display().to_string(),
+                    contest.join("tools/in/{SEED04}.txt").display().to_string(),
+                    contest
+                        .join(format!("results/pahcer/work/{solver}/out/{{SEED04}}.txt"))
+                        .display()
+                        .to_string(),
+                ],
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                measure_time: false,
+            });
+        }
+    }
+
+    let solver_args = vec![
+        "build".to_string(),
+        "--release".to_string(),
+        "--bin".to_string(),
+        solver.to_string(),
+    ];
+    let tool_name = if tools.tester.is_some() {
+        "tester"
+    } else {
+        "vis"
+    };
+    let tools_args = vec![
+        "build".to_string(),
+        "--release".to_string(),
+        "--manifest-path".to_string(),
+        "tools/Cargo.toml".to_string(),
+        "--bin".to_string(),
+        tool_name.to_string(),
+    ];
+    let file = PahcerConfigFile {
+        general: PahcerGeneralConfig {
+            version: "0.4.0".to_string(),
+        },
+        problem: PahcerProblemConfig {
+            problem_name: config.contest_id.clone(),
+            objective: match config.score_direction {
+                ScoreDirection::Maximize => "Max",
+                ScoreDirection::Minimize => "Min",
+            }
+            .to_string(),
+            score_regex: config.pahcer_score_pattern.clone(),
+        },
+        test: PahcerTestConfig {
+            start_seed: 0,
+            end_seed: cases,
+            threads,
+            out_dir: "./results/pahcer".to_string(),
+            compile_steps: vec![
+                PahcerCompileStep {
+                    program: "cargo".to_string(),
+                    args: solver_args,
+                },
+                PahcerCompileStep {
+                    program: "cargo".to_string(),
+                    args: tools_args,
+                },
+            ],
+            test_steps,
+        },
+    };
+    create_parent(destination)?;
+    fs::write(destination, toml::to_string_pretty(&file)?)?;
+    Ok(())
+}
+
+fn executable_for_config(contest: &Path, executable: &Path) -> String {
+    format!("./{}", relative_display(contest, executable))
+}
+
+fn latest_pahcer_result(directory: &Path) -> Result<PathBuf> {
+    let mut results = fs::read_dir(directory)
+        .with_context(|| {
+            format!(
+                "pahcer result directory was not found: {}",
+                directory.display()
+            )
+        })?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("result_") && name.ends_with(".json"))
+        })
+        .collect::<Vec<_>>();
+    results.sort();
+    results
+        .pop()
+        .ok_or_else(|| anyhow!("pahcer did not create a result JSON"))
+}
+
+fn seconds_to_milliseconds(seconds: f64) -> u128 {
+    (seconds.max(0.0) * 1000.0).round() as u128
+}
+
+fn validate_solver_name(solver: &str) -> Result<()> {
+    let regex = Regex::new(r"^[A-Za-z0-9_-]+$").unwrap();
+    if regex.is_match(solver) {
+        Ok(())
+    } else {
+        bail!("solver name must use letters, digits, '_' or '-': {solver}")
+    }
 }
 
 fn save_benchmark(contest: &Path, result: &BenchmarkResult) -> Result<()> {
@@ -1080,7 +1579,18 @@ fn print_case_result(result: &CaseResult) {
 fn print_benchmark(result: &BenchmarkResult) {
     println!();
     println!(
-        "cases={} total={} average={:.2} min={} max={} elapsed={}ms",
+        "runner={} mode={} threads={}",
+        result.runner,
+        result.score_mode,
+        if result.threads == 0 {
+            "auto".to_string()
+        } else {
+            result.threads.to_string()
+        }
+    );
+    println!(
+        "accepted={}/{} total={} average={:.2} min={} max={} elapsed={}ms",
+        result.accepted_cases,
         result.cases,
         result.total_score,
         result.average_score,
@@ -1088,18 +1598,33 @@ fn print_benchmark(result: &BenchmarkResult) {
         result.maximum_score,
         result.wall_time_milliseconds
     );
+    if let Some(relative) = result.average_relative_score {
+        println!("average_{}={relative:.3}", result.score_mode);
+    }
+    if let Some(maximum) = result.maximum_execution_milliseconds {
+        println!("max_execution={maximum}ms");
+    }
+    if !result.comment.is_empty() {
+        println!("comment={}", result.comment);
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn save_snapshot(
+    root: &Path,
     contest: &Path,
     config: &ContestConfig,
     name: &str,
     solver: &str,
     cases: usize,
+    builtin: bool,
+    threads: usize,
 ) -> Result<()> {
     validate_snapshot_name(name)?;
     let source_before = tree_fingerprint(&contest.join("src"))?;
-    let summary = benchmark(contest, config, solver, cases)?;
+    let summary = benchmark(
+        root, contest, config, solver, cases, builtin, threads, false, false, name,
+    )?;
     let source_after = tree_fingerprint(&contest.join("src"))?;
     if source_before != source_after {
         bail!("source changed during benchmark; snapshot was not saved")
@@ -1138,6 +1663,35 @@ fn save_snapshot(
     println!("Saved snapshot {id:03}_{name}");
     println!("Searchable solution: {}", solution_path.display());
     Ok(())
+}
+
+fn show_pahcer_history(root: &Path, contest: &Path, rank: bool, number: usize) -> Result<()> {
+    if number == 0 {
+        bail!("number must be positive");
+    }
+    let pahcer = pahcer_binary(root);
+    if !pahcer.is_file() {
+        bail!(
+            "pahcer was not found; run {}/scripts/install-pahcer.sh",
+            root.display()
+        );
+    }
+    let config = contest.join("results/pahcer/config.toml");
+    if !config.is_file() {
+        bail!("pahcer history was not found; run ./ahc bench first");
+    }
+    let mut command = Command::new(pahcer);
+    command
+        .arg("list")
+        .arg("--setting-file")
+        .arg(config)
+        .arg("--number")
+        .arg(number.to_string())
+        .current_dir(contest);
+    if rank {
+        command.arg("--rank");
+    }
+    run_checked(&mut command, "pahcer history failed")
 }
 
 fn validate_snapshot_name(name: &str) -> Result<()> {
@@ -1592,6 +2146,46 @@ mod tests {
         fs::write(&child, "pub const VALUE: usize = 42;").unwrap();
         let expanded = expand_includes(&root, &mut Vec::new()).unwrap();
         assert!(expanded.contains("pub const VALUE: usize = 42;"));
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn pahcer_config_runs_selected_binaries_in_place() {
+        let directory =
+            env::temp_dir().join(format!("ahc-pahcer-config-test-{}", std::process::id()));
+        fs::create_dir_all(directory.join("target/release")).unwrap();
+        fs::create_dir_all(directory.join("tools/target/release")).unwrap();
+        fs::create_dir_all(directory.join("scripts")).unwrap();
+        fs::write(directory.join(".ahc-root"), "test workspace\n").unwrap();
+        fs::write(
+            directory.join("scripts/run-isolated.sh"),
+            "#!/bin/sh\nexec \"$@\"\n",
+        )
+        .unwrap();
+        let destination = directory.join("results/pahcer/config.toml");
+        let config = ContestConfig {
+            contest_id: "ahc999".to_string(),
+            score_direction: ScoreDirection::Maximize,
+            score_pattern: default_score_pattern(),
+            pahcer_score_pattern: default_pahcer_score_pattern(),
+            web_visualizer_url: None,
+            total_time_limit_seconds: None,
+        };
+        let tools = BuiltTools {
+            solver: directory.join("target/release/beam"),
+            generator: None,
+            tester: None,
+            visualizer: Some(directory.join("tools/target/release/vis")),
+        };
+
+        write_pahcer_config(&directory, &config, "beam", 10, 4, &tools, &destination).unwrap();
+        let text = fs::read_to_string(destination).unwrap();
+        assert!(text.contains("program = \"./target/release/beam\""));
+        assert!(text.contains("run-isolated.sh"));
+        assert!(text.contains("tools/target/release/vis"));
+        assert!(text.contains("threads = 4"));
+        assert!(!text.contains("program = \"rm\""));
+        assert!(!text.contains("program = \"mv\""));
         fs::remove_dir_all(&directory).unwrap();
     }
 }
