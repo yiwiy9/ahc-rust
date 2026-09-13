@@ -1,19 +1,34 @@
 # 短期AHC 当日手順
 
+コンテスト固有の問題名・時刻・規則は、毎回公式ページで確認してこの手順の `<contest_id>` を置き換える。これは開始前に用意する常設の操作メモであり、コンテスト終了後も削除しない。
+
+## 開始前
+
+```sh
+cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust
+./ahc doctor
+```
+
+`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。VS Code はこの `ahc-rust` ディレクトリを開く。
+
+短期AHCでは生成AI利用規則を必ず公式ページで確認する。生成AIが原則禁止の回では、開始後に対話型生成AIを問題理解・方針・実装・デバッグ・実行結果の分析に使わない。事前に公開したコードテンプレートを使う場合だけ、提出コード内の対応するURL注記を残す。事前に作った操作メモ・学習ノートへはこの注記は不要である。
+
 ## 開始直後
 
 ```sh
 cd ahc-rust
 ./scripts/install-pahcer.sh # 初回だけ。事前に実行する
-./ahc new ahc071
-cd contests/ahc071
+./ahc new <contest_id>
+cd contests/<contest_id>
 ./ahc doctor
 ```
 
-公式ツールURLを自動検出できない場合だけ、問題ページのZIP URLを指定します。
+開始前に公式ツールURLを自動検出できなければ、`new` はディレクトリを残さず失敗する。開始後にURL自動検出だけが失敗した場合はディレクトリを作り、次の再試行を案内する。URLを明示する場合は、開始時刻に関係なく使える。
 
 ```sh
 ./ahc tools --url 'https://img.atcoder.jp/.../tools.zip'
+# または、作成時に明示する:
+./ahc new <contest_id> --tools-url 'https://img.atcoder.jp/.../tools.zip'
 ```
 
 提出は `./ahc export --clipboard` の後、AtCoderのWeb画面へ貼り付けます。ログイン情報をCLIへ渡しません。
@@ -31,7 +46,36 @@ cd contests/ahc071
 9. 同じseed集合で比較し、改善した断面だけ `save` する
 10. debug検証を通してからreleaseを提出する
 
-必要なときだけ `../../scripts/check-linux.sh ahc071 a` でRust 1.89/Linux上のコンパイルも確認します。通常の試行錯誤はMacネイティブの方が軽く、Dockerは必須ではありません。
+必要なときだけ `../../scripts/check-linux.sh <contest_id> a` でRust 1.89/Linux上のコンパイルも確認します。通常の試行錯誤はMacネイティブの方が軽く、Dockerは必須ではありません。
+
+## 1ケース・可視化・エラー調査
+
+```sh
+./ahc run 0 --solver greedy --debug
+./ahc vis 0 --solver greedy --debug --open
+```
+
+`run` はseed 0について、debugビルド、solver実行、公式採点、HTML可視化を行う。可視化では得点だけでなく、行動の軌跡・盤面・制約・意図した構造を確認する。
+
+失敗時は標準エラーログを見る。デバッグ表示は提出出力を壊さない `eprintln!` を使い、`println!` には解だけを出す。
+
+```sh
+less results/logs/greedy/debug/0000.log
+RUST_BACKTRACE=1 ./ahc run 0 --solver greedy --debug --no-vis
+```
+
+## 得点と「意図した解」を分けて検証する
+
+得点一致だけでは不十分である。debug時に、次を別々に確認する。
+
+1. `validate_output` が出力形式・値域・個数・制約を検証する
+2. 出力した行動を先頭から再生して、各手が合法である
+3. 再生後の位置・盤面がStateの保持値と一致する
+4. Parametersから再構築したOutputが、保持中のOutputと一致する
+5. Stateの評価値または差分評価が、素直な `calculate_score` と一致する
+6. `apply_move` の直後に `undo_move` するとState全体が戻る
+
+重い検算は `debug_assert_eq!`、観察は `eprintln!` にする。探索バグは入力seed・乱数seed・反復回数を固定して再現する。
 
 ## コマンドの短いループ
 
@@ -85,3 +129,12 @@ final
 ```
 
 完全な作業状態は無視対象の `snapshots/`、検索・Git管理する自己完結コードは `solutions/` に自動保存されます。コンテスト中にGit操作は不要です。
+
+## 提出前
+
+```sh
+./ahc run 0 --solver a --debug
+./ahc export --solver a --clipboard
+```
+
+`export` は `include!` を展開した単一ファイルを `submit/a.rs` に保存してクリップボードへコピーする。貼り付け前に、開始前テンプレートのURL注記が残っていること、デバッグ用の `println!` が混ざっていないことを確認する。
