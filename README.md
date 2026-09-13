@@ -11,6 +11,7 @@
 ./scripts/install-pahcer.sh # 初回だけ
 ./ahc new ahc071
 cd contests/ahc071
+# ここで問題固有の入出力・解の構築を実装する（下記の初回ガイド参照）。
 ./ahc run 0 --solver greedy
 ./ahc bench --solver greedy --cases 10 --threads 4
 ./ahc history --rank
@@ -20,7 +21,7 @@ cd contests/ahc071
 ./ahc web --open
 ```
 
-`run` は1 seedのデバッグ、`bench` はworkspace-localのpahcerによる並列比較です。pahcerが扱えない得点形式や障害時には `bench --builtin` で逐次runnerへ戻れます。
+`run` は1 seedの実行・採点で、既定はreleaseビルドです。検算やpanicの調査には `run 0 --solver greedy --debug` を使います。`bench` はworkspace-localのpahcerによる並列比較です。pahcerが扱えない得点形式や障害時には `bench --builtin` で逐次runnerへ戻れます。生成直後のテンプレートは未実装なので、上記をそのまま順に実行しても合法な解にはなりません。
 
 `cargo compete` と `oj` は使用しません。提出は `export` した単一RustファイルをWeb画面へコピーします。
 

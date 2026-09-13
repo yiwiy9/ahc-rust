@@ -11,7 +11,7 @@ cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust
 ./ahc doctor
 ```
 
-`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。VS Codeは、共通libも検索するため [ahc-rust.code-workspace](../ahc-rust.code-workspace) を開く。Explorerに `ahc-rust` と `atcoder-lib` が並ぶことを確認する。
+`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。`Ready.` は必須コマンドの存在確認で、コンパイル・採点成功の保証ではない。コンテスト内ではtoolsの `[not found]` も確認し、準備後に `run` で実動作を確かめる。VS Codeは、共通libも検索するため [ahc-rust.code-workspace](../ahc-rust.code-workspace) を開く。Explorerに `ahc-rust` と `atcoder-lib` が並ぶことを確認する。
 
 共通libを探すときは `⌘⇧F` で両方を検索し、必要ならRustファイルでprefix（例: `bfs`）を書いて `⌃Space` からスニペットを挿入する。共通libを更新した場合だけ、開始前に `./scripts/sync-vscode-snippets.sh` を実行する。
 
@@ -84,8 +84,8 @@ cd contests/<contest_id>
 1. 問題文を読み、制約・得点の向き・出力の自由度を `ahc.toml` とメモへ書く
 2. Input / Output / `read_input` / `print_answer` を0-indexedで実装する
 3. `valid.rs` で形式上有効な最小解を出す
-4. `validate_output` と、遅くても正しい `calculate_score` を書く
-5. `ConstructiveState` を埋め、`greedy` で正の得点を取る
+4. `validate_output` に軽い検証を足す。`calculate_score` は自前の採点比較・局所探索を始める前までに書く
+5. 道Aの `solve` または道Bの `ConstructiveState` を実装し、最小解から改善する（正の得点であることは全問題共通の条件ではない）
 6. seed 0だけでビジュアライザを見て、方針のズレを直す
 7. seed 0〜9を固定してbaselineを保存する
 8. 問題の形から、乱択・ビーム・局所探索の一つを追加する
@@ -125,7 +125,9 @@ cd contests/<contest_id>
 
 次へ進む目安は「なぜその点数か説明でき、合法性と意図した動作の両方を確認できる」。得点が一致しても、作りたかった行動列になっているとは限らない。
 
-### 4. 貪欲：一手を選ぶ基準を一つ作る
+### 4. 道Bの貪欲：一手を選ぶ基準を一つ作る
+
+道Aを選んだ場合は、このState分割は不要。同じ考え方を `a.rs` の `solve` 内に実装してよい。
 
 `src/constructive_state.rs` の `State` と `Action` を実装する。必要な入力もStateから参照・保持できるようにする。`src/bin/greedy.rs` が入口で、基本の探索ループは `src/framework/constructive.rs` にある。
 
@@ -167,7 +169,9 @@ cd contests/<contest_id>
 
 ### 7. 山登り：変更・採点・取り消しを確かめる
 
-編集するのは選んだStateの `Move`、`propose_move`、`apply_move`、`undo_move`、`debug_validate`。初期状態の `propose_move = None` では探索は始まらない。入口は `src/bin/local_search_direct.rs` または `local_search_rebuild.rs` で、最初は `Acceptance::HillClimbing` のまま試す。
+編集するのは選んだStateの `Move`、`propose_move`、`apply_move`、`undo_move`、`debug_validate`。初期状態の `propose_move = None` では探索は始まらない。入口は `src/bin/local_search_direct.rs` または `local_search_rebuild.rs`。direct版は山登り、rebuild版は焼きなましが初期設定なので、rebuild版ではまず `let acceptance = Acceptance::HillClimbing;` に変更して試す。
+
+両binの初期解は、既定ではconstructive_stateの貪欲から作る。道Aの `solve` やビームの結果を使う場合は `initial_output` の生成処理を明示的に接続する。詳しくは[初回ガイドの局所探索への接続](first-contest-guide.md#直接変更する場合-local-search-direct)を参照。
 
 - 変更後のOutputが合法で、意図した箇所・派生データが変わる。
 - 評価が素直な全再計算と一致する。
@@ -280,12 +284,13 @@ delta-update
 final
 ```
 
-完全な作業状態は無視対象の `snapshots/`、検索・Git管理する自己完結コードは `solutions/` に自動保存されます。コンテスト中にGit操作は不要です。
+`snapshots/` には `src/`・`ahc.toml`・計測結果を保存し、検索・Git管理する単一ファイルの解答は `solutions/` に保存します。Cargo.toml・Cargo.lock・公式tools・入力はsnapshotに含まれないため、環境全体の完全バックアップではありません。依存を変えた場合は別途記録・保存してください。コンテスト中にGit操作は必須ではありません。
 
 ## 提出前
 
 ```sh
 ./ahc run 0 --solver a --debug
+./ahc run 0 --solver a
 ./ahc export --solver a --clipboard
 ```
 

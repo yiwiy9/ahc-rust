@@ -4,7 +4,7 @@
 
 最初の目標は高得点ではない。**公式toolsに受理され、可視化した内容を自分で説明できる解を一つ提出できるようにすること**である。
 
-## 先に覚える4つの場所
+## 主に使う場所
 
 | 場所 | 役割 | 自分で編集するか |
 | --- | --- | --- |
@@ -30,9 +30,9 @@ cd contests/<contest_id>
 ./ahc doctor
 ```
 
-これは、問題ごとのRustプロジェクトと公式toolsを用意し、コンパイル・生成・採点ができるか調べる操作である。
+`new` は問題ごとのRustプロジェクトと公式toolsを用意する。`doctor` は必須コマンドの存在や、関連ファイルの配置を確認する。コンパイル・入力生成・採点はまだ実行していない。
 
-成功の印は `Ready.`。失敗したら、まず表示された `[missing]` やtoolsの案内をそのまま読む。開始後に公式toolsのURLだけを見つけられない場合は、表示されたURL指定の `./ahc tools --url <URL>` を実行する。
+`Ready.` は必須コマンドが見つかった印であり、toolsや入力の準備完了を保証しない。`[missing]` に加え `[not found]` も確認する。開始後に公式toolsのURLだけを見つけられない場合は、表示されたURL指定の `./ahc tools --url <URL>` を実行する。実際に動くことは、段階3の `run` で確認する。
 
 ## 1. コードを書く前に問題文からメモする
 
@@ -91,9 +91,9 @@ let output = Output { /* 問題固有の値 */ };
 
 ### 成功したら見るもの
 
-- `Score = ...` など公式toolsの結果が出る。
-- `Output:` のファイルが作られる。
-- `Visualization:` のパスが出る。
+- `score=...` に公式toolsから取得した得点が出る。
+- `output=...` のファイルが作られる。
+- 公式toolsが `vis.html` を生成する場合、`visualization=...` のパスが出る。生成しない形式では公式Webビジュアライザ等を使う。
 
 続けて次を実行する。
 
@@ -293,8 +293,12 @@ fn main() {
 | ファイル | 編集内容 |
 | --- | --- |
 | `src/local_search_state_direct.rs` | `Move`、`propose_move`、`apply_move`、`undo_move`、評価値 |
-| `src/bin/local_search_direct.rs` | 最初は通常編集しない。時間と初期解の作り方だけ必要に応じて調整 |
+| `src/bin/local_search_direct.rs` | 時間予算を確認し、下記の初期解生成を接続する |
 | `src/framework/local_search.rs` | 編集しない |
+
+**初期解の接続を確認する。** 追加したbinは、既定では `solve_greedy(ConstructiveState::new(&input)).into_output()` で初期解を作る。道Bの貪欲はそのまま利用できるが、道Aで書いた `a.rs` の `solve` やビームの結果は自動では利用されない。
+
+道Aから進む場合は、解を作る `solve` をmainとは別の共有ファイルへ切り出し、a側と局所探索側から同じ `problem::Input` / `Output` で呼ぶ。局所探索binの `initial_output` をその関数の戻り値に置き換え、使わなくなったconstructive_state関連のmodule宣言・useを外す。mainを含む `a.rs` 全体をそのままincludeしない。ビームを初期解にする場合も、その生成処理を明示的に接続する。この確認はrebuild版にも必要。
 
 最初は近傍を一種類だけにする。debug buildで `apply_move` → `undo_move` が元のStateに戻ること、評価値と `calculate_score` が一致することを確認する。
 
@@ -321,7 +325,7 @@ AHC_ITERATIONS=100 ./ahc run 0 --solver local_search_direct --debug --no-vis
 
 古いOutputをコピーするだけの `rebuild` では、再構築探索にならない。例えば「優先順位」をParametersで変えるなら、その順位で貪欲選択からやり直してOutputを作る。
 
-テンプレートのrebuild版は最初から焼きなましを選んでいる。温度を触る前に、固定反復でMove・再構築・undoが正しいことを確認する。
+テンプレートのrebuild版は最初から焼きなましを選んでいる。まず `src/bin/local_search_rebuild.rs` の `let acceptance = ...;` を `let acceptance = Acceptance::HillClimbing;` に変更し、固定反復でMove・再構築・undoが正しいことを確認する。初期解生成も前節の接続手順に従う。
 
 ```sh
 AHC_ITERATIONS=100 ./ahc run 0 --solver local_search_rebuild --debug --no-vis
@@ -331,7 +335,7 @@ AHC_ITERATIONS=100 ./ahc run 0 --solver local_search_rebuild --debug --no-vis
 
 局所探索の正しさを確認してから、`src/bin/local_search_direct.rs` または `local_search_rebuild.rs` の `Acceptance` を確認する。
 
-- `HillClimbing`: 改善したMoveだけ採用する。まずはこちらで近傍の正しさを確かめる。
+- `HillClimbing`: 評価が改善するMoveと同点のMoveを採用する（`delta >= 0`）。まずはこちらで近傍の正しさを確かめる。
 - `SimulatedAnnealing`: 悪化Moveも確率で採用する。山越えが必要なときだけ使う。
 
 温度は得点全体の大きさではなく、1 Moveでどれくらい悪化するかに合わせる。まずは `AHC_SAMPLE_DELTAS=1` で悪化幅を観察し、表示された候補から試す。
@@ -348,6 +352,7 @@ AHC_ITERATIONS=1000 AHC_SAMPLE_DELTAS=1 ./ahc run 0 --solver local_search_direct
 
 ```sh
 ./ahc run 0 --solver a --debug
+./ahc run 0 --solver a
 ./ahc export --solver a --clipboard
 ```
 
