@@ -34,6 +34,16 @@ cd contests/ahc071
 
 Rustでは保存時に `rustfmt`、保存後に `clippy` を実行します。補完候補は自動表示しない設定で、必要なときだけ `Ctrl+Space`（macOSでは `⌃Space`）で表示します。
 
+共通libもエディタで参照する本番時は、フォルダではなく [ahc-rust.code-workspace](ahc-rust.code-workspace) をVS Codeで開く。Explorer と `⌘⇧F` の検索対象に `ahc-rust` と `atcoder-lib` が並ぶ。コンテスト実装は前者の `contests/<contest_id>/src/bin/`、共通libは後者から読む。
+
+`atcoder-lib` の `#[snippet]` 定義は `.vscode/rust.code-snippets` へ生成済みである。Rustファイルで `bfs` などのprefixを書き、`⌃Space` から選んで挿入する。共通libを更新した後だけ、次で再生成する。
+
+```bash
+./scripts/sync-vscode-snippets.sh
+```
+
+このスクリプトはリポジトリ内の `.tools/bin/cargo-snippet` を使い、共通libは変更しない。初回だけ `.tools` へローカル導入が必要な場合は、表示されるコマンドに従う。
+
 ## ディレクトリ
 
 - `crates/ahc-cli`: コンテスト生成、実行、採点、保存、検索、export

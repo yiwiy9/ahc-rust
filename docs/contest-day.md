@@ -9,7 +9,9 @@ cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust
 ./ahc doctor
 ```
 
-`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。VS Code はこの `ahc-rust` ディレクトリを開く。
+`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。VS Codeは、共通libも検索するため [ahc-rust.code-workspace](../ahc-rust.code-workspace) を開く。Explorerに `ahc-rust` と `atcoder-lib` が並ぶことを確認する。
+
+共通libを探すときは `⌘⇧F` で両方を検索し、必要ならRustファイルでprefix（例: `bfs`）を書いて `⌃Space` からスニペットを挿入する。共通libを更新した場合だけ、開始前に `./scripts/sync-vscode-snippets.sh` を実行する。
 
 短期AHCでは生成AI利用規則を必ず公式ページで確認する。生成AIが原則禁止の回では、開始後に対話型生成AIを問題理解・方針・実装・デバッグ・実行結果の分析に使わない。事前に公開したコードテンプレートを使う場合だけ、提出コード内の対応するURL注記を残す。事前に作った操作メモ・学習ノートへはこの注記は不要である。
 
