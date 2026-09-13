@@ -687,29 +687,27 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
         bail!("contest already exists: {}", destination.display());
     }
 
-    let resolved_url = match tools_url {
-        Some(url) => Ok(url.to_string()),
-        None => discover_tools_url(contest_id),
-    };
-
-    let url = match resolved_url {
-        Ok(url) => url,
-        Err(error) if contest_has_started(contest_id)? => {
-            create_contest_scaffold(root, contest_id, &destination)?;
-            eprintln!("Official tools URL was not found automatically: {error:#}");
-            eprintln!("Created the contest workspace without official tools.");
-            eprintln!("Copy the official tools.zip URL from the problem page, then run:");
-            eprintln!("  ./ahc tools --url <URL>");
-            println!("Created: {}", destination.display());
-            println!("Next: ./ahc tools --url <URL>");
-            return Ok(());
-        }
-        Err(error) => {
+    let url = match tools_url {
+        Some(url) => url.to_string(),
+        None if !contest_has_started(contest_id)? => {
             bail!(
-                "official tools URL was not found, so no contest workspace was created: {error:#}\n\\
-                 Before the contest, retry after the problem is published or pass --tools-url <URL>."
+                "contest {contest_id} has not started, so no contest workspace was created.\\n\\
+                 Run ./ahc new {contest_id} after the contest begins."
             );
         }
+        None => match discover_tools_url(contest_id) {
+            Ok(url) => url,
+            Err(error) => {
+                create_contest_scaffold(root, contest_id, &destination)?;
+                eprintln!("Official tools URL was not found automatically: {error:#}");
+                eprintln!("Created the contest workspace without official tools.");
+                eprintln!("Copy the official tools.zip URL from the problem page, then run:");
+                eprintln!("  ./ahc tools --url <URL>");
+                println!("Created: {}", destination.display());
+                println!("Next: ./ahc tools --url <URL>");
+                return Ok(());
+            }
+        },
     };
 
     create_contest_scaffold(root, contest_id, &destination)?;
