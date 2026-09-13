@@ -691,8 +691,7 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
         Some(url) => url.to_string(),
         None if !contest_has_started(contest_id)? => {
             bail!(
-                "contest {contest_id} has not started, so no contest workspace was created.\\n\\
-                 Run ./ahc new {contest_id} after the contest begins."
+                "contest {contest_id} has not started, so no contest workspace was created.\nRun ./ahc new {contest_id} after the contest begins."
             );
         }
         None => match discover_tools_url(contest_id) {
