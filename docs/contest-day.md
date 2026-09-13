@@ -23,7 +23,7 @@ cd contests/<contest_id>
 ./ahc doctor
 ```
 
-開始前に公式ツールURLを自動検出できなければ、`new` はディレクトリを残さず失敗する。開始後にURL自動検出だけが失敗した場合はディレクトリを作り、次の再試行を案内する。URLを明示する場合は、開始時刻に関係なく使える。
+開始前に公式ツールURLを自動検出できなければ、`new` はディレクトリを残さず失敗する。開始後にURL自動検出だけが失敗した場合はディレクトリを作り、`cd contests/<contest_id> && ./ahc tools --url <URL>` を案内する。URLを明示する場合は、開始時刻に関係なく使える。
 
 ```sh
 ./ahc tools --url 'https://img.atcoder.jp/.../tools.zip'

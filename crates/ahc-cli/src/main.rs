@@ -689,24 +689,31 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
 
     let url = match tools_url {
         Some(url) => url.to_string(),
-        None if !contest_has_started(contest_id)? => {
-            bail!(
-                "contest {contest_id} has not started, so no contest workspace was created.\nRun ./ahc new {contest_id} after the contest begins."
-            );
-        }
-        None => match discover_tools_url(contest_id) {
-            Ok(url) => url,
-            Err(error) => {
-                create_contest_scaffold(root, contest_id, &destination)?;
-                eprintln!("Official tools URL was not found automatically: {error:#}");
-                eprintln!("Created the contest workspace without official tools.");
-                eprintln!("Copy the official tools.zip URL from the problem page, then run:");
-                eprintln!("  ./ahc tools --url <URL>");
-                println!("Created: {}", destination.display());
-                println!("Next: ./ahc tools --url <URL>");
-                return Ok(());
+        None => {
+            let started = contest_has_started(contest_id).map_err(|_| {
+                anyhow!(
+                    "could not determine whether contest {contest_id} has started, so no contest workspace was created.\nCheck your network connection and retry."
+                )
+            })?;
+            if !started {
+                bail!(
+                    "contest {contest_id} has not started, so no contest workspace was created.\nRun ./ahc new {contest_id} after the contest begins."
+                );
             }
-        },
+            match discover_tools_url(contest_id) {
+                Ok(url) => url,
+                Err(_) => {
+                    create_contest_scaffold(root, contest_id, &destination)?;
+                    eprintln!("Warning: official tools URL was not found automatically.");
+                    eprintln!("Created the contest workspace without official tools.");
+                    eprintln!("Copy the official tools.zip URL from the problem page, then run:");
+                    eprintln!("  cd contests/{contest_id} && ./ahc tools --url <URL>");
+                    println!("Created: {}", destination.display());
+                    println!("Next: cd contests/{contest_id} && ./ahc tools --url <URL>");
+                    return Ok(());
+                }
+            }
+        }
     };
 
     create_contest_scaffold(root, contest_id, &destination)?;
@@ -731,7 +738,11 @@ fn create_contest_scaffold(root: &Path, contest_id: &str, destination: &Path) ->
 fn install_tools_for_contest(contest: &Path, contest_id: &str, url: Option<&str>) -> Result<()> {
     let url = match url {
         Some(value) => value.to_string(),
-        None => discover_tools_url(contest_id)?,
+        None => discover_tools_url(contest_id).map_err(|_| {
+            anyhow!(
+                "official tools URL was not found automatically.\nCopy the official tools.zip URL from the problem page, then run:\n  ./ahc tools --url <URL>"
+            )
+        })?,
     };
     let destination = contest.join("tools");
     let backup = if destination.exists() {
