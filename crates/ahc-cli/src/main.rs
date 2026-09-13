@@ -44,6 +44,11 @@ enum Commands {
         #[arg(long)]
         url: Option<String>,
     },
+    /// Maintain VS Code settings for the independent contest Cargo projects.
+    Vscode {
+        #[command(subcommand)]
+        command: VscodeCommand,
+    },
     /// Add a solver scaffold without modifying existing solvers.
     Add {
         #[arg(value_enum)]
@@ -166,6 +171,12 @@ enum SolverTemplate {
     BeamFast,
     LocalSearchDirect,
     LocalSearchRebuild,
+}
+
+#[derive(Subcommand, Debug)]
+enum VscodeCommand {
+    /// Rebuild rust-analyzer's linked-project list from the current contests directory.
+    Sync,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -382,6 +393,13 @@ fn main() -> Result<()> {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;
             let config = load_contest_config(&contest)?;
             install_tools_for_contest(&contest, &config.contest_id, url.as_deref())
+        }
+        Commands::Vscode {
+            command: VscodeCommand::Sync,
+        } => {
+            register_vscode_linked_projects(&root)?;
+            println!("Updated: .vscode/settings.json (rust-analyzer linked projects)");
+            Ok(())
         }
         Commands::Add { template } => {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;

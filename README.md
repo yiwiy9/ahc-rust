@@ -24,6 +24,16 @@ cd contests/ahc071
 
 `cargo compete` と `oj` は使用しません。提出は `export` した単一RustファイルをWeb画面へコピーします。
 
+## VS Code
+
+`rust-analyzer` と CodeLLDB を推奨拡張として登録しています。`./ahc new <contest_id>` は、そのコンテストの `Cargo.toml` を rust-analyzer の対象へ自動追加します。コンテストを手動で削除した後は、ルートで次を一度実行して古い登録を掃除します。
+
+```bash
+./ahc vscode sync
+```
+
+Rustでは保存時に `rustfmt`、保存後に `clippy` を実行します。補完候補は自動表示しない設定で、必要なときだけ `Ctrl+Space`（macOSでは `⌃Space`）で表示します。
+
 ## ディレクトリ
 
 - `crates/ahc-cli`: コンテスト生成、実行、採点、保存、検索、export
