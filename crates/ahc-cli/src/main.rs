@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -11,6 +11,7 @@ use chrono::{DateTime, FixedOffset, Local, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
@@ -704,6 +705,7 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
                 Ok(url) => url,
                 Err(_) => {
                     create_contest_scaffold(root, contest_id, &destination)?;
+                    register_vscode_linked_projects(root)?;
                     eprintln!("Warning: official tools URL was not found automatically.");
                     eprintln!("Created the contest workspace without official tools.");
                     eprintln!("Copy the official tools.zip URL from the problem page, then run:");
@@ -722,6 +724,7 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
         return Err(error)
             .context("official tools could not be installed; contest workspace was removed");
     }
+    register_vscode_linked_projects(root)?;
     println!("Official tools installed from {url}");
 
     println!("Created: {}", destination.display());
@@ -733,6 +736,51 @@ fn create_contest_scaffold(root: &Path, contest_id: &str, destination: &Path) ->
     let template = root.join("templates/contest");
     copy_tree(&template, destination)?;
     replace_in_tree(destination, "__CONTEST_ID__", contest_id)
+}
+
+// VS Code ではルートのCLI workspaceと各コンテストが別々のCargo projectである。
+// linkedProjectsを更新しておくと、コンテストを新規作成した直後からrust-analyzerが
+// そのCargo.tomlを読み、補完・定義ジャンプ・診断を提供できる。
+fn register_vscode_linked_projects(root: &Path) -> Result<()> {
+    let settings_path = root.join(".vscode/settings.json");
+    let mut settings: Value = if settings_path.exists() {
+        let text = fs::read_to_string(&settings_path)
+            .with_context(|| format!("failed to read {}", settings_path.display()))?;
+        serde_json::from_str(&text).with_context(|| {
+            format!(
+                "failed to parse {} as JSON while registering rust-analyzer projects",
+                settings_path.display()
+            )
+        })?
+    } else {
+        json!({})
+    };
+
+    let object = settings
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("{} must contain a JSON object", settings_path.display()))?;
+
+    let mut projects = BTreeSet::from(["./Cargo.toml".to_string()]);
+    let contests = root.join("contests");
+    if contests.is_dir() {
+        for entry in fs::read_dir(&contests)
+            .with_context(|| format!("failed to read {}", contests.display()))?
+        {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() && entry.path().join("Cargo.toml").is_file() {
+                projects.insert(format!(
+                    "./contests/{}/Cargo.toml",
+                    entry.file_name().to_string_lossy()
+                ));
+            }
+        }
+    }
+    object.insert(
+        "rust-analyzer.linkedProjects".to_string(),
+        Value::Array(projects.into_iter().map(Value::String).collect()),
+    );
+
+    write_json_atomic(&settings_path, &settings)
 }
 
 fn install_tools_for_contest(contest: &Path, contest_id: &str, url: Option<&str>) -> Result<()> {
@@ -2185,6 +2233,37 @@ mod tests {
             select_contest_start_time(html).unwrap().to_rfc3339(),
             "2026-09-13T19:00:00+09:00"
         );
+    }
+
+    #[test]
+    fn vscode_linked_projects_include_each_contest_manifest() {
+        let directory = env::temp_dir().join(format!("ahc-vscode-test-{}", std::process::id()));
+        fs::create_dir_all(directory.join(".vscode")).unwrap();
+        fs::create_dir_all(directory.join("contests/ahc999")).unwrap();
+        fs::write(directory.join("Cargo.toml"), "[workspace]\n").unwrap();
+        fs::write(
+            directory.join("contests/ahc999/Cargo.toml"),
+            "[package]\nname = \"ahc999\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(
+            directory.join(".vscode/settings.json"),
+            "{\n  \"editor.formatOnSave\": true\n}\n",
+        )
+        .unwrap();
+
+        register_vscode_linked_projects(&directory).unwrap();
+
+        let settings: Value = serde_json::from_str(
+            &fs::read_to_string(directory.join(".vscode/settings.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(settings["editor.formatOnSave"], Value::Bool(true));
+        assert_eq!(
+            settings["rust-analyzer.linkedProjects"],
+            json!(["./Cargo.toml", "./contests/ahc999/Cargo.toml"])
+        );
+        fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]
