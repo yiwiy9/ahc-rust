@@ -1,0 +1,18 @@
+[package]
+name = "intro-heuristics"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# 各コンテストを独立したCargo workspaceにする。
+[workspace]
+exclude = ["tools"]
+
+[dependencies]
+itertools = "=0.14.0"
+proconio = { version = "=0.5.0", features = ["derive"] }
+rand = "=0.9.2"
+rand_pcg = "=0.9.0"
+
+[profile.release]
+overflow-checks = true

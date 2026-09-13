@@ -1,0 +1,5 @@
+contest_id = "intro-heuristics"
+score_direction = "maximize"
+score_pattern = 'Score\s*=\s*(-?[0-9]+)'
+pahcer_score_pattern = '(?m)^\s*Score\s*=\s*(?P<score>\d+)\s*$'
+web_visualizer_url = "https://img.atcoder.jp/intro-heuristics/vis.html?lang=ja"

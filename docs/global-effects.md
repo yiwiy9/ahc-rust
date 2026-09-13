@@ -16,6 +16,13 @@ AHC環境の作成・利用で、既存の `atcoder-rust`、シェル設定、PA
 - `practice-algorithm-rust-snippets` を兄弟ディレクトリ `atcoder-lib` へcloneした。構築時revisionは `c308629`。
 - AHC070公式tool ZIPをAtCoderから新リポジトリ内へ取得し、入れ子のCargo workspaceとしてビルドできるよう公式 `tools/Cargo.toml` 末尾へ空の `[workspace]` を追加した。solver/tool本体は変更していない。
 
+## 2026-09-13: introの完成例を追加
+
+- 旧環境から解答5本と公式toolsのソース・lock・seed一覧を `contests/intro-heuristics` へコピー。旧ファイルは変更・削除していない。
+- 新環境の `ahc.toml` とコンテスト用 `ahc` ランチャーを追加し、既存の実行・採点・保存コマンドで扱う。VS CodeのlinkedProjectsへCargo.tomlを追加した。
+- ビルド時に不足していた公式toolsの依存をCargo registry cacheへ取得した。既存キャッシュの削除、グローバルコマンド・toolchainのインストール、PATH・シェル・VS Codeユーザー設定の変更はない。
+- ケース・ビルド成果物・計測結果はintro配下のGit無視対象。登録を戻す場合は追加したコンテストとlinkedProjectsの該当項目だけが対象で、旧環境への復旧作業は不要。Cargoの共有キャッシュは他プロジェクトでも使うため一括削除しない。
+
 最終配置先は `/Users/yiwiy/Codes/atcoder/ahc-workspace`。このディレクトリを削除すれば、今回追加する環境全体を元に戻せる。
 
 pahcerだけ撤去する場合は `ahc-rust/.tools` を削除する。計測履歴は各contestの無視対象 `results/pahcer` にあり、solverコードとは分離されている。

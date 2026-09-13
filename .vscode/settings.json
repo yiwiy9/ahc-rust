@@ -15,6 +15,7 @@
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml",
-    "./contests/ahc070/Cargo.toml"
+    "./contests/ahc070/Cargo.toml",
+    "./contests/intro-heuristics/Cargo.toml"
   ]
 }
