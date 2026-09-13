@@ -1,3 +1,5 @@
+// Pre-contest AI-generated template (published before the contest):
+// https://github.com/yiwiy9/ahc-rust/tree/main/templates
 use std::time::{Duration, Instant};
 
 mod problem {
