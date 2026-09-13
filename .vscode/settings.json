@@ -1,17 +1,14 @@
 {
   "editor.formatOnSave": true,
-  "editor.inlineSuggest.enabled": false,
-  "editor.quickSuggestions": {
-    "comments": "off",
-    "other": "off",
-    "strings": "off"
-  },
-  "editor.suggestOnTriggerCharacters": false,
   "github.copilot.enable": {
     "*": false
   },
   "[rust]": {
-    "editor.quickSuggestions": false,
+    "editor.quickSuggestions": {
+      "comments": "off",
+      "strings": "off",
+      "other": "off"
+    },
     "editor.suggestOnTriggerCharacters": false,
     "editor.inlineSuggest.enabled": false
   },
