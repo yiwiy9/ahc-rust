@@ -66,7 +66,7 @@ ahc-workspace/
 
 現在のclone元は `https://github.com/yiwiy9/practice-algorithm-rust-snippets.git` です。競技前に `./ahc doctor` がcloneのrevisionとdirty状態を表示します。
 
-詳しい当日手順は `docs/contest-day.md`、方式選択は `docs/strategy-guide.md`、バグ調査は `docs/debugging.md` を参照します。
+初めて問題を解くときは `docs/first-contest-guide.md`、当日の短い手順は `docs/contest-day.md`、方式選択は `docs/strategy-guide.md`、バグ調査は `docs/debugging.md` を参照します。
 
 ## グローバルへの影響
 
