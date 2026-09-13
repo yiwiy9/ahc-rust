@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::Local;
+use chrono::{DateTime, FixedOffset, Local, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -687,35 +687,48 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
         bail!("contest already exists: {}", destination.display());
     }
 
-    let template = root.join("templates/contest");
-    copy_tree(&template, &destination)?;
-    replace_in_tree(&destination, "__CONTEST_ID__", contest_id)?;
-
-    let resolved_url = if let Some(url) = tools_url {
-        Some(url.to_string())
-    } else {
-        discover_tools_url(contest_id).ok()
+    let resolved_url = match tools_url {
+        Some(url) => Ok(url.to_string()),
+        None => discover_tools_url(contest_id),
     };
 
-    if let Some(url) = resolved_url {
-        match install_official_tools(&destination, &url) {
-            Ok(()) => println!("Official tools installed from {url}"),
-            Err(error) => {
-                eprintln!("Official tools could not be installed: {error:#}");
-                eprintln!("Retry inside the contest with: ./ahc tools --url <URL>");
-            }
+    let url = match resolved_url {
+        Ok(url) => url,
+        Err(error) if contest_has_started(contest_id)? => {
+            create_contest_scaffold(root, contest_id, &destination)?;
+            eprintln!("Official tools URL was not found automatically: {error:#}");
+            eprintln!("Created the contest workspace without official tools.");
+            eprintln!("Copy the official tools.zip URL from the problem page, then run:");
+            eprintln!("  ./ahc tools --url <URL>");
+            println!("Created: {}", destination.display());
+            println!("Next: ./ahc tools --url <URL>");
+            return Ok(());
         }
-    } else {
-        eprintln!("Official tools URL was not found automatically.");
-        eprintln!(
-            "Download tools.zip and extract it as {}/tools",
-            destination.display()
-        );
+        Err(error) => {
+            bail!(
+                "official tools URL was not found, so no contest workspace was created: {error:#}\n\\
+                 Before the contest, retry after the problem is published or pass --tools-url <URL>."
+            );
+        }
+    };
+
+    create_contest_scaffold(root, contest_id, &destination)?;
+    if let Err(error) = install_official_tools(&destination, &url) {
+        fs::remove_dir_all(&destination).ok();
+        return Err(error)
+            .context("official tools could not be installed; contest workspace was removed");
     }
+    println!("Official tools installed from {url}");
 
     println!("Created: {}", destination.display());
     println!("Next: cd contests/{contest_id} && ./ahc doctor");
     Ok(())
+}
+
+fn create_contest_scaffold(root: &Path, contest_id: &str, destination: &Path) -> Result<()> {
+    let template = root.join("templates/contest");
+    copy_tree(&template, destination)?;
+    replace_in_tree(destination, "__CONTEST_ID__", contest_id)
 }
 
 fn install_tools_for_contest(contest: &Path, contest_id: &str, url: Option<&str>) -> Result<()> {
@@ -775,6 +788,27 @@ fn discover_tools_url(contest_id: &str) -> Result<String> {
     }
     let html = String::from_utf8_lossy(&output.stdout).replace("&amp;", "&");
     select_tools_url(&html).ok_or_else(|| anyhow!("tools.zip link was not found on {task_url}"))
+}
+
+fn contest_has_started(contest_id: &str) -> Result<bool> {
+    let contest_url = format!("https://atcoder.jp/contests/{contest_id}?lang=en");
+    let output = Command::new("curl")
+        .args(["-fsSL", &contest_url])
+        .output()
+        .with_context(|| format!("failed to fetch {contest_url}"))?;
+    if !output.status.success() {
+        bail!("AtCoder returned an error for {contest_url}");
+    }
+    let html = String::from_utf8_lossy(&output.stdout);
+    let start = select_contest_start_time(&html)
+        .ok_or_else(|| anyhow!("contest start time was not found on {contest_url}"))?;
+    Ok(Utc::now() >= start.with_timezone(&Utc))
+}
+
+fn select_contest_start_time(html: &str) -> Option<DateTime<FixedOffset>> {
+    let regex = Regex::new(r#"var\s+startTime\s*=\s*moment\(\"([^\"]+)\"\)"#).unwrap();
+    let value = regex.captures(html)?.get(1)?.as_str();
+    DateTime::parse_from_rfc3339(value).ok()
 }
 
 fn select_tools_url(html: &str) -> Option<String> {
@@ -2133,6 +2167,15 @@ mod tests {
         assert_eq!(
             select_tools_url(html).as_deref(),
             Some("https://img.atcoder.jp/ahc999/a1b2c3.zip")
+        );
+    }
+
+    #[test]
+    fn contest_start_time_is_read_from_atcoder_page() {
+        let html = r#"<script>var startTime = moment("2026-09-13T19:00:00+09:00");</script>"#;
+        assert_eq!(
+            select_contest_start_time(html).unwrap().to_rfc3339(),
+            "2026-09-13T19:00:00+09:00"
         );
     }
 

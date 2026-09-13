@@ -32,7 +32,7 @@ cd contests/ahc071
 
 `new` は問題専用のRustプロジェクトを作り、公式ツールのURLを見つけられれば `tools/` へ入れる。`doctor` で `Cargo.toml`、`tools/Cargo.toml`、`tools/in/0000.txt` がすべて `[ok]` かを見る。
 
-公式ツールを自動取得できなければ、問題ページから公式tools.zipのURLをコピーして実行する。
+開始前に公式ツールを取得できなければ、`new` はディレクトリを残さず失敗する。開始後に公式ツールURLだけ自動取得できなければ、ディレクトリを作って次の再試行を案内する。問題ページから公式tools.zipのURLをコピーして実行する。
 
 ```sh
 ./ahc tools --url 'https://img.atcoder.jp/.../tools.zip'
