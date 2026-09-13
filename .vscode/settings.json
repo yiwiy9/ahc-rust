@@ -7,6 +7,14 @@
     "strings": "off"
   },
   "editor.suggestOnTriggerCharacters": false,
+  "github.copilot.enable": {
+    "*": false
+  },
+  "[rust]": {
+    "editor.quickSuggestions": false,
+    "editor.suggestOnTriggerCharacters": false,
+    "editor.inlineSuggest.enabled": false
+  },
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml",
