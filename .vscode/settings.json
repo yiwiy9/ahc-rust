@@ -16,6 +16,7 @@
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml",
     "./contests/ahc070/Cargo.toml",
+    "./contests/ahc071/Cargo.toml",
     "./contests/intro-heuristics/Cargo.toml"
   ],
   "search.useIgnoreFiles": false,
