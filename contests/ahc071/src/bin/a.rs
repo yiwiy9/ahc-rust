@@ -163,6 +163,8 @@ fn calculate_score(input: &Input, output: &Output) -> i64 {
 #[derive(Debug, Clone)]
 pub struct State {
     output: Output,
+    // ここまでに実際に使ったレンガ代。評価値とは分けて持つ。
+    used_cost: i64,
     evaluated_cost: i64,
     actual_score: i64,
     // 今何行目か
@@ -175,7 +177,9 @@ impl State {
     fn new(input: &Input) -> Self {
         Self {
             output: Vec::new(),
-            evaluated_cost: 0,
+            used_cost: 0,
+            // 最初の行へ持ち込まれるのは、その行にある穴だけ。
+            evaluated_cost: estimate_cost(input, input.height + 1, &[]),
             actual_score: INITIAL_SCORE,
             row_idx: input.height + 1,
             new_row_holes: Vec::new(),
@@ -203,8 +207,9 @@ impl State {
             // new_row_holes
             self.new_row_holes.push(x + cost_idx);
         }
-        // evaluated_score
-        self.evaluated_cost += action.1;
+        self.used_cost += action.1;
+        self.evaluated_cost =
+            self.used_cost + estimate_cost(input, self.row_idx, &self.new_row_holes);
     }
 
     // 現在の部分解から次に試す操作を列挙する。
@@ -283,6 +288,26 @@ impl State {
         res.dedup();
         res
     }
+}
+
+// 次の行で処理すべき義務の概算コスト。
+// 義務が多いほど将来のレンガ代がかかり、左右に散らばるほど
+// 幅広レンガで早く合流させにくいので、ビームの評価に加える。
+fn estimate_cost(input: &Input, row_idx: usize, new_row_holes: &[usize]) -> i64 {
+    if row_idx == 0 {
+        return 0;
+    }
+
+    let mut obligations = input.row_holes_list[row_idx - 1].clone();
+    obligations.extend_from_slice(new_row_holes);
+    obligations.sort_unstable();
+    obligations.dedup();
+
+    let span = obligations
+        .first()
+        .zip(obligations.last())
+        .map_or(0, |(&left, &right)| (right - left) as i64);
+    obligations.len() as i64 * 10 + span
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
