@@ -4,11 +4,29 @@
 
 競技環境はAI、OBS、AtCoderログインへ依存しません。配信環境とは確定したローカル計測 `results/latest.json` を介して連携します。競技側の履歴は別途 `results/events.jsonl` に残します。
 
-## 基本操作
+## いつもの操作
+
+VS Codeでは **ahc-rustフォルダ単体** を開く。過去コードは `contests/`、共通libとABCコードは `references/` から読める。`⌘⇧F` でまとめて検索できる。
+
+```sh
+# 初回だけリンクを作成（この環境では設定済み。以降の更新操作は不要）
+python3 scripts/setup-references.py
+# コンテスト内で使う基本の4つ。bin名は省略するとa。
+cd contests/ahc071
+./scripts/build.sh a
+./scripts/run-one.sh a 0
+./scripts/debug.sh a 0
+./scripts/run-all.sh a 10
+./ahc export --solver a --clipboard
+```
+
+`run-all` は追加ツールなしの逐次計測。並列比較が欲しくなったときだけ `bench` / pahcerを使う。[エディタ・実行環境](docs/environment.md)に設定・依存・InputとStateの扱いをまとめている。
+
+## コンテスト作成・追加操作
 
 ```bash
 ./ahc doctor
-./scripts/install-pahcer.sh # 初回だけ
+./scripts/install-pahcer.sh # 並列計測を使う場合だけ、事前に実行
 ./ahc new ahc071
 cd contests/ahc071
 # ここで問題固有の入出力・解の構築を実装する（下記の初回ガイド参照）。
@@ -33,9 +51,9 @@ cd contests/ahc071
 ./ahc vscode sync
 ```
 
-Rustでは保存時に `rustfmt`、保存後に `clippy` を実行します。補完候補は自動表示しない設定で、必要なときだけ `Ctrl+Space`（macOSでは `⌃Space`）で表示します。
+Rustでは保存時に `rustfmt`、保存後に `cargo check` を実行します。補完候補は自動表示しない設定で、必要なときだけ `Ctrl+Space`（macOSでは `⌃Space`）で表示します。
 
-共通libもエディタで参照する本番時は、フォルダではなく [ahc-rust.code-workspace](ahc-rust.code-workspace) をVS Codeで開く。Explorer と `⌘⇧F` の検索対象に `ahc-rust` と `atcoder-lib` が並ぶ。コンテスト実装は前者の `contests/<contest_id>/src/bin/`、共通libは後者から読む。
+本番はahc-rustフォルダ単体で開く。共通libは `references/atcoder-lib/`、ABCの過去実装は `references/abc/` のシンボリックリンクから読む。元の変更がそのまま見えるため同期操作は不要。VS Codeでは参照部分を読み取り専用にしている。
 
 `atcoder-lib` の `#[snippet]` 定義は `.vscode/rust.code-snippets` へ生成済みである。Rustファイルで `bfs` などのprefixを書き、`⌃Space` から選んで挿入する。共通libを更新した後だけ、次で再生成する。
 
@@ -56,16 +74,15 @@ Rustでは保存時に `rustfmt`、保存後に `clippy` を実行します。�
 
 ## 共通lib
 
-共通libはAHC solverのCargo依存ではなく、検索・コピペ対象です。AHC workspaceと同じ親ディレクトリへcloneし、`workspace.toml` から参照します。
+共通libの実体はABC側の `atcoder-rust/src/lib/src` の一つだけです。AHC側は `references/atcoder-lib` から検索・スニペット生成に使い、別cloneは持ちません。solverのCargo依存にはしません。
 
 ```text
 ahc-workspace/
 ├── ahc-rust/
-├── ahc-studio/
-└── atcoder-lib/
+└── ahc-studio/
 ```
 
-現在のclone元は `https://github.com/yiwiy9/practice-algorithm-rust-snippets.git` です。競技前に `./ahc doctor` がcloneのrevisionとdirty状態を表示します。
+`./ahc doctor` はリンク先であるABC側libのrevisionとdirty状態を表示します。ABC側でメンテした内容は検索へそのまま反映されます。スニペットを再生成するときも同じ実体を読みます。
 
 初めて問題を解くときは `docs/first-contest-guide.md`、当日の短い手順は `docs/contest-day.md`、方式選択は `docs/strategy-guide.md`、バグ調査は `docs/debugging.md` を参照します。
 

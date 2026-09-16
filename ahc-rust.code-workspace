@@ -3,13 +3,7 @@
     {
       "name": "ahc-rust",
       "path": "."
-    },
-    {
-      "name": "atcoder-lib",
-      "path": "../atcoder-lib"
     }
   ],
-  "settings": {
-    "rust-analyzer.notifications.cargoTomlNotFound": false
-  }
+  "settings": {}
 }

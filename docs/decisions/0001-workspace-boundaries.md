@@ -6,7 +6,7 @@
 - 配信画面、順位取得、AI連携は `ahc-studio` リポジトリへ分離する。
 - 両者はJSONファイルの契約だけで接続する。
 - 既存のABC環境は変更しない。
-- 共通libはAHC workspaceにもcloneするが、検索・コピペ対象とし、solverのビルド依存にはしない。
+- 共通libはABC側の実体だけを持ち、AHCの `references/atcoder-lib` からリンクで検索・スニペット生成に使う。solverのビルド依存にはしない。
 - Macネイティブ実行を標準とし、DockerはLinux互換確認用の任意機能とする。
 - `cargo compete`、`oj`、AtCoderログイン情報へ依存しない。
 

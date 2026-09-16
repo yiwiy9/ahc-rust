@@ -33,11 +33,11 @@ const TIME_LIMIT: Duration = Duration::from_millis(1_900);
 fn main() {
     let started_at = Instant::now();
     let input = read_input();
-    let initial_output = solve_greedy(ConstructiveState::new(&input)).into_output();
+    let initial_output = solve_greedy(&input, ConstructiveState::new(&input)).into_output();
     let initial = State::new(&input, initial_output);
     let budget = SearchBudget::from_env(started_at, TIME_LIMIT);
     let mut rng = Pcg64Mcg::seed_from_u64(42);
-    let state = optimize(initial, Acceptance::HillClimbing, budget, &mut rng);
+    let state = optimize(&input, initial, Acceptance::HillClimbing, budget, &mut rng);
     let output = state.into_output();
 
     #[cfg(debug_assertions)]

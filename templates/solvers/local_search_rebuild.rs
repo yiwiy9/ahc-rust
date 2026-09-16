@@ -33,15 +33,12 @@ const TIME_LIMIT: Duration = Duration::from_millis(1_900);
 fn main() {
     let started_at = Instant::now();
     let input = read_input();
-    let initial_output = solve_greedy(ConstructiveState::new(&input)).into_output();
+    let initial_output = solve_greedy(&input, ConstructiveState::new(&input)).into_output();
     let initial = State::new(&input, initial_output);
     let budget = SearchBudget::from_env(started_at, TIME_LIMIT);
     let mut rng = Pcg64Mcg::seed_from_u64(42);
-    let acceptance = Acceptance::SimulatedAnnealing {
-        start_temperature: 1_000.0,
-        end_temperature: 10.0,
-    };
-    let state = optimize(initial, acceptance, budget, &mut rng);
+    let acceptance = Acceptance::HillClimbing;
+    let state = optimize(&input, initial, acceptance, budget, &mut rng);
     let output = state.into_output();
 
     #[cfg(debug_assertions)]

@@ -4,7 +4,7 @@ set -euo pipefail
 # atcoder-libの#[snippet]付きコードをVS Code用スニペットへ変換する。
 # 共通libは編集せず、.tools/配下の一時crateからpath moduleとして読む。
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-LIB_DIR="$ROOT_DIR/../atcoder-lib"
+LIB_DIR="$ROOT_DIR/references/atcoder-lib"
 SNIPPET_BIN="$ROOT_DIR/.tools/bin/cargo-snippet"
 WORK_DIR="$ROOT_DIR/.tools/snippet-workspace"
 OUTPUT_PATH="$ROOT_DIR/.vscode/rust.code-snippets"

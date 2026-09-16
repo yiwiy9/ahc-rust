@@ -1,21 +1,41 @@
 {
+  "[rust]": {
+    "editor.inlineSuggest.enabled": false,
+    "editor.quickSuggestions": {
+      "comments": "off",
+      "other": "off",
+      "strings": "off"
+    },
+    "editor.suggestOnTriggerCharacters": false
+  },
   "editor.formatOnSave": true,
   "github.copilot.enable": {
     "*": false
   },
-  "[rust]": {
-    "editor.quickSuggestions": {
-      "comments": "off",
-      "strings": "off",
-      "other": "off"
-    },
-    "editor.suggestOnTriggerCharacters": false,
-    "editor.inlineSuggest.enabled": false
-  },
-  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.command": "check",
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml",
     "./contests/ahc070/Cargo.toml",
     "./contests/intro-heuristics/Cargo.toml"
-  ]
+  ],
+  "search.useIgnoreFiles": false,
+  "search.useGlobalIgnoreFiles": false,
+  "search.exclude": {
+    "**/target": true,
+    "**/.git": true,
+    "**/.tools": true,
+    "**/tools": true,
+    "**/out": true,
+    "**/results": true,
+    "**/snapshots": true,
+    "**/submit": true,
+    "**/visualizations": true
+  },
+  "files.watcherExclude": {
+    "**/target/**": true
+  },
+  "files.readonlyInclude": {
+    "references/**/*": true
+  },
+  "search.followSymlinks": true
 }

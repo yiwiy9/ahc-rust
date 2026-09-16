@@ -23,7 +23,7 @@ const BEAM_WIDTH: usize = 100;
 
 fn main() {
     let input = read_input();
-    let state = solve_beam(State::new(&input), BEAM_WIDTH);
+    let state = solve_beam(&input, State::new(&input), BEAM_WIDTH);
     let output = state.into_output();
 
     #[cfg(debug_assertions)]

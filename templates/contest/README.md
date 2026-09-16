@@ -2,6 +2,19 @@
 
 初めてこの問題を解くときは、[初回AHC: 手を動かす手順書](../../docs/first-contest-guide.md) を開き、「編集 → 実行 → 確認 → 修正」の順に進める。
 
+## 実行の入口
+
+```sh
+./scripts/build.sh a
+./scripts/run-one.sh a 0
+./scripts/debug.sh a 0
+./scripts/run-all.sh a 10
+./ahc export --solver a --clipboard
+```
+
+`run-all` は追加ツール不要。引数はbin名→seed / 件数の順。
+入力はmainから `&Input` で探索とStateのメソッドへ渡す。Stateに入力全体をコピーしない。詳しくは [エディタ・実行環境](../../docs/environment.md)。
+
 ## 初回の最短ルート
 
 最初から探索テンプレートを埋める必要はありません。まず次だけ行います。

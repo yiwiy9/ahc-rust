@@ -7,13 +7,14 @@ ahc-workspace/
 │   ├── templates/            新しい問題へコピーする型
 │   ├── contests/ahc070/      問題固有コードと検索用の過去解
 │   └── docs/
-├── ahc-studio/               OBS画面・順位・AI操作のGitリポジトリ
-└── atcoder-lib/              ABC環境と同じ共通libの別clone
+└── ahc-studio/               OBS画面・順位・AI操作のGitリポジトリ
 ```
 
 `ahc-rust` は単独でコンテスト参加できます。`ahc-studio` は競技コードを起動・変更せず、現在は `results/latest.json` だけを読みます。競技側の `results/events.jsonl` は将来の分析や演出に使える履歴として残します。
 
 各contestも独立したCargo workspaceです。これによりcontestごとの `Cargo.lock` と `target` が分かれ、将来 `contests` や `templates` を別リポジトリへ移してもコードの依存方向は変わりません。
+
+共通libは `references/atcoder-lib` → ABC側の `atcoder-rust/src/lib/src` を参照する。AHC側に別cloneは置かない。
 
 ## 問題ごとに編集する場所
 

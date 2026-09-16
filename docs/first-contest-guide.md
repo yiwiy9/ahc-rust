@@ -1,5 +1,7 @@
 # 初回AHC: 手を動かす手順書
 
+操作に迷ったら、コンテスト内で `./scripts/run-one.sh a 0`（1件）、`./scripts/debug.sh a 0`（検算）、`./scripts/run-all.sh a 10`（10件）。[環境・参照コードの使い方](environment.md)。
+
 この文書は、初めて新しいAHC問題へ取り組むときの一本道である。各段階で「何を編集するか」「何のためか」「実行するコマンド」「成功なら次に何をするか」「失敗ならどこを見るか」を決める。
 
 最初の目標は高得点ではない。**公式toolsに受理され、可視化した内容を自分で説明できる解を一つ提出できるようにすること**である。
@@ -296,7 +298,7 @@ fn main() {
 | `src/bin/local_search_direct.rs` | 時間予算を確認し、下記の初期解生成を接続する |
 | `src/framework/local_search.rs` | 編集しない |
 
-**初期解の接続を確認する。** 追加したbinは、既定では `solve_greedy(ConstructiveState::new(&input)).into_output()` で初期解を作る。道Bの貪欲はそのまま利用できるが、道Aで書いた `a.rs` の `solve` やビームの結果は自動では利用されない。
+**初期解の接続を確認する。** 追加したbinは、既定では `solve_greedy(&input, ConstructiveState::new(&input)).into_output()` で初期解を作る。道Bの貪欲はそのまま利用できるが、道Aで書いた `a.rs` の `solve` やビームの結果は自動では利用されない。
 
 道Aから進む場合は、解を作る `solve` をmainとは別の共有ファイルへ切り出し、a側と局所探索側から同じ `problem::Input` / `Output` で呼ぶ。局所探索binの `initial_output` をその関数の戻り値に置き換え、使わなくなったconstructive_state関連のmodule宣言・useを外す。mainを含む `a.rs` 全体をそのままincludeしない。ビームを初期解にする場合も、その生成処理を明示的に接続する。この確認はrebuild版にも必要。
 
@@ -325,7 +327,7 @@ AHC_ITERATIONS=100 ./ahc run 0 --solver local_search_direct --debug --no-vis
 
 古いOutputをコピーするだけの `rebuild` では、再構築探索にならない。例えば「優先順位」をParametersで変えるなら、その順位で貪欲選択からやり直してOutputを作る。
 
-テンプレートのrebuild版は最初から焼きなましを選んでいる。まず `src/bin/local_search_rebuild.rs` の `let acceptance = ...;` を `let acceptance = Acceptance::HillClimbing;` に変更し、固定反復でMove・再構築・undoが正しいことを確認する。初期解生成も前節の接続手順に従う。
+テンプレートのrebuild版も最初は山登り。固定反復でMove・再構築・undoが正しいことを確認する。初期解生成も前節の接続手順に従う。
 
 ```sh
 AHC_ITERATIONS=100 ./ahc run 0 --solver local_search_rebuild --debug --no-vis

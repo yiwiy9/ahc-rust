@@ -1,2 +1,2 @@
-search_roots = ["contests", "templates"]
-common_library_path = "../atcoder-lib"
+search_roots = ["contests", "templates", "references"]
+common_library_path = "references/atcoder-lib"

@@ -10,3 +10,5 @@
 /contests/*/snapshots/
 /contests/*/submit/
 .DS_Store
+/references/
+__pycache__/

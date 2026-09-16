@@ -4,14 +4,16 @@ use rand::Rng;
 
 /// 問題固有の解・スコア・近傍操作を、探索ループから分離する。
 pub trait LocalSearchState: Clone + std::fmt::Debug + PartialEq {
+    type Input;
     type Move: Clone;
 
     /// 探索内部の値。貪欲やビームと同様に「大きいほどよい」にそろえる。
-    fn evaluated_value(&self) -> i64;
-    fn propose_move<R: Rng + ?Sized>(&self, rng: &mut R) -> Option<Self::Move>;
-    fn apply_move(&mut self, movement: &Self::Move);
-    fn undo_move(&mut self, movement: &Self::Move);
-    fn debug_validate(&self) {}
+    fn evaluated_value(&self, input: &Self::Input) -> i64;
+    fn propose_move<R: Rng + ?Sized>(&self, input: &Self::Input, rng: &mut R)
+        -> Option<Self::Move>;
+    fn apply_move(&mut self, input: &Self::Input, movement: &Self::Move);
+    fn undo_move(&mut self, input: &Self::Input, movement: &Self::Move);
+    fn debug_validate(&self, _input: &Self::Input) {}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -62,6 +64,7 @@ impl SearchBudget {
 
 /// 山登りと焼きなましの共通ループ。問題ごとの差はLocalSearchStateへ閉じ込める。
 pub fn optimize<S, R>(
+    input: &S::Input,
     mut current: S,
     acceptance: Acceptance,
     budget: SearchBudget,
@@ -72,7 +75,7 @@ where
     R: Rng + ?Sized,
 {
     let mut best = current.clone();
-    let mut current_value = current.evaluated_value();
+    let mut current_value = current.evaluated_value(input);
     let mut best_value = current_value;
     let mut iteration = 0;
     let collect_deltas = std::env::var_os("AHC_SAMPLE_DELTAS").is_some();
@@ -87,19 +90,22 @@ where
     }
 
     while budget.has_next(iteration) {
-        let Some(movement) = current.propose_move(rng) else {
+        let Some(movement) = current.propose_move(input, rng) else {
             break;
         };
         #[cfg(debug_assertions)]
         let before_move = current.clone();
-        current.apply_move(&movement);
-        let next_value = current.evaluated_value();
+        current.apply_move(input, &movement);
+        // 棄却する候補も検算する。debugでは速さより更新漏れの発見を優先する。
+        #[cfg(debug_assertions)]
+        current.debug_validate(input);
+        let next_value = current.evaluated_value(input);
         let delta = next_value - current_value;
         if collect_deltas {
             if delta < 0 && bad_deltas.len() < 10_000 {
                 bad_deltas.push(-delta);
             }
-            current.undo_move(&movement);
+            current.undo_move(input, &movement);
             #[cfg(debug_assertions)]
             debug_assert_eq!(current, before_move, "apply_move + undo_move changed State");
             iteration += 1;
@@ -125,20 +131,20 @@ where
                 best_value = current_value;
             }
         } else {
-            current.undo_move(&movement);
+            current.undo_move(input, &movement);
             #[cfg(debug_assertions)]
             debug_assert_eq!(current, before_move, "apply_move + undo_move changed State");
         }
 
         #[cfg(debug_assertions)]
         if iteration % 100 == 0 {
-            current.debug_validate();
+            current.debug_validate(input);
         }
         iteration += 1;
     }
 
     #[cfg(debug_assertions)]
-    best.debug_validate();
+    best.debug_validate(input);
     if collect_deltas {
         print_delta_stats(&mut bad_deltas);
     }

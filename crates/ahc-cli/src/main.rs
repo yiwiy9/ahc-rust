@@ -76,6 +76,7 @@ enum Commands {
         no_build: bool,
     },
     /// Run the same solver on seeds 0..cases and save normalized JSON results.
+    #[command(visible_alias = "all")]
     Bench {
         #[arg(long, default_value = "a")]
         solver: String,
@@ -191,7 +192,7 @@ impl Default for WorkspaceConfig {
     fn default() -> Self {
         Self {
             search_roots: default_search_roots(),
-            common_library_path: Some("../atcoder-lib".to_string()),
+            common_library_path: Some("references/atcoder-lib".to_string()),
         }
     }
 }
@@ -968,6 +969,19 @@ fn locate_tools_root(extract_path: &Path) -> Result<PathBuf> {
 }
 
 fn add_solver(root: &Path, contest: &Path, template: SolverTemplate) -> Result<()> {
+    if !contest.join("src/framework/constructive.rs").is_file() {
+        bail!("このコンテストには新規生成用の構築テンプレートがありません。既存コードは変更していません。過去の完成例には当時の実装を使ってください。");
+    }
+    // 旧コンテストへ新APIの一部だけを追加するとコンパイル不能になる。コピー前に止める。
+    for relative in [
+        "src/framework/constructive.rs",
+        "src/framework/local_search.rs",
+    ] {
+        let path = contest.join(relative);
+        if path.exists() && !fs::read_to_string(&path)?.contains("type Input;") {
+            bail!("旧版の探索APIです: {}。既存コードは変更していません。新テンプレートは別の新規コンテストで使うか、Input引数を含むAPI全体を明示的に移行してください。", path.display());
+        }
+    }
     let mappings: &[(&str, &str)] = match template {
         SolverTemplate::RandomSearch => &[
             (
@@ -2138,7 +2152,31 @@ fn search(
     }
 
     let mut command = Command::new("rg");
-    command.arg("-n").arg("--smart-case").arg(&pattern);
+    // referencesはGit対象外だが検索対象。実行結果や依存の巨大な生成物は読まない。
+    command.args([
+        "-n",
+        "--smart-case",
+        "--no-ignore",
+        "--follow",
+        "-g",
+        "*.rs",
+        "-g",
+        "*.md",
+    ]);
+    for directory in [
+        "target",
+        ".git",
+        ".tools",
+        "tools",
+        "out",
+        "results",
+        "snapshots",
+        "submit",
+        "visualizations",
+    ] {
+        command.arg("-g").arg(format!("!**/{directory}/**"));
+    }
+    command.arg("--").arg(&pattern);
     for path in paths {
         command.arg(path);
     }
@@ -2231,6 +2269,34 @@ fn now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_search_api_is_rejected_before_any_file_is_added() {
+        let directory = env::temp_dir().join(format!("ahc-old-api-test-{}", std::process::id()));
+        fs::create_dir_all(directory.join("src/framework")).unwrap();
+        fs::write(
+            directory.join("src/framework/constructive.rs"),
+            "pub trait ConstructiveState: Clone { type Action; }",
+        )
+        .unwrap();
+        let before = tree_fingerprint(&directory).unwrap();
+        assert!(add_solver(Path::new("unused"), &directory, SolverTemplate::Beam).is_err());
+        assert_eq!(tree_fingerprint(&directory).unwrap(), before);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn all_is_a_bench_alias() {
+        let cli = Cli::try_parse_from(["ahc", "all", "--builtin", "--cases", "2"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Bench {
+                builtin: true,
+                cases: 2,
+                ..
+            }
+        ));
+    }
 
     #[test]
     fn tools_url_prefers_non_windows_archive_without_tools_in_name() {

@@ -27,7 +27,7 @@ fn main() {
     let input = read_input();
     let initial = State::new(&input);
     let mut rng = Pcg64Mcg::seed_from_u64(42);
-    let state = solve_random_search(&initial, TRIALS, &mut rng);
+    let state = solve_random_search(&input, &initial, TRIALS, &mut rng);
     let output = state.into_output();
 
     #[cfg(debug_assertions)]

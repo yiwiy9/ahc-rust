@@ -1,6 +1,7 @@
 use crate::problem::{Input, Output};
 
-/// 構築中の解に加え、次の1手の評価に必要な問題固有データを持つ。
+/// 構築中の解と、手を進めるたびに変わるキャッシュを持つ。
+/// 変わらない入力は各メソッドのinputから参照し、Stateへコピーしない。
 #[derive(Debug, Clone)]
 pub struct State {
     output: Output,
@@ -23,26 +24,27 @@ impl State {
 }
 
 impl crate::framework::constructive::ConstructiveState for State {
+    type Input = Input;
     type Action = Action;
 
-    fn is_complete(&self) -> bool {
+    fn is_complete(&self, _input: &Input) -> bool {
         true
     }
 
-    fn legal_actions(&self) -> Vec<Self::Action> {
+    fn legal_actions(&self, _input: &Input) -> Vec<Self::Action> {
         Vec::new()
     }
 
-    fn advance(&mut self, _action: &Self::Action) {
+    fn advance(&mut self, _input: &Input, _action: &Self::Action) {
         // outputと評価用キャッシュを、必ず同じ1手で更新する。
     }
 
-    fn evaluated_value(&self) -> i64 {
+    fn evaluated_value(&self, _input: &Input) -> i64 {
         // 探索エンジンは「大きいほどよい」値として比較する。
         0
     }
 
-    fn debug_validate(&self) {
+    fn debug_validate(&self, _input: &Input) {
         // 小さい入力やdebug buildで、キャッシュを素直な再計算結果と照合する。
     }
 }

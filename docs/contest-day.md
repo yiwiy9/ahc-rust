@@ -1,5 +1,7 @@
 # 短期AHC 当日手順
 
+操作に迷ったら、コンテスト内で `./scripts/run-one.sh a 0`（1件）、`./scripts/debug.sh a 0`（検算）、`./scripts/run-all.sh a 10`（10件）。[環境・参照コードの使い方](environment.md)。
+
 コンテスト固有の問題名・時刻・規則は、毎回公式ページで確認してこの手順の `<contest_id>` を置き換える。これは開始前に用意する常設の操作メモであり、コンテスト終了後も削除しない。
 
 初めて新しい問題を解くときの「編集 → 実行 → 確認 → 修正」の詳細は、[初回AHC: 手を動かす手順書](first-contest-guide.md) を先に読む。この文書は当日の短いチェックリストである。
@@ -11,15 +13,15 @@ cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust
 ./ahc doctor
 ```
 
-`Ready.` と出ること、`pahcer` が `[ok]` であることを確認する。`Ready.` は必須コマンドの存在確認で、コンパイル・採点成功の保証ではない。コンテスト内ではtoolsの `[not found]` も確認し、準備後に `run` で実動作を確かめる。VS Codeは、共通libも検索するため [ahc-rust.code-workspace](../ahc-rust.code-workspace) を開く。Explorerに `ahc-rust` と `atcoder-lib` が並ぶことを確認する。
+`Ready.` と出ることを確認する。pahcerの `[ok]` は並列計測を使う場合だけ必要で、`run-all.sh` には不要。`Ready.` は必須コマンドの存在確認で、コンパイル・採点成功の保証ではない。コンテスト内ではtoolsの `[not found]` も確認し、準備後に `run` で実動作を確かめる。VS Codeはahc-rustフォルダ単体で開く。共通lib・ABCコードは `references/` から検索する。初回のみ `python3 scripts/setup-references.py` でリンクを作る。以降は更新不要。
 
-共通libを探すときは `⌘⇧F` で両方を検索し、必要ならRustファイルでprefix（例: `bfs`）を書いて `⌃Space` からスニペットを挿入する。共通libを更新した場合だけ、開始前に `./scripts/sync-vscode-snippets.sh` を実行する。
+共通libを探すときは `⌘⇧F` でリポジトリ内を検索し、必要ならRustファイルでprefix（例: `bfs`）を書いて `⌃Space` からスニペットを挿入する。共通libを更新した場合だけ、開始前に `./scripts/sync-vscode-snippets.sh` を実行する。
 
 短期AHCでは生成AI利用規則を必ず公式ページで確認する。生成AIが原則禁止の回では、開始後に対話型生成AIを問題理解・方針・実装・デバッグ・実行結果の分析に使わない。事前に公開したコードテンプレートを使う場合だけ、提出コード内の対応するURL注記を残す。事前に作った操作メモ・学習ノートへはこの注記は不要である。
 
 ## 開始直後
 
-ahc-rust直下から実行する。pahcerの初回導入は開始前に済ませる。
+ahc-rust直下から実行する。pahcerを使う場合、その初回導入は開始前に済ませる。
 
 ```sh
 ./ahc new <contest_id>
@@ -169,7 +171,7 @@ cd contests/<contest_id>
 
 ### 7. 山登り：変更・採点・取り消しを確かめる
 
-編集するのは選んだStateの `Move`、`propose_move`、`apply_move`、`undo_move`、`debug_validate`。初期状態の `propose_move = None` では探索は始まらない。入口は `src/bin/local_search_direct.rs` または `local_search_rebuild.rs`。direct版は山登り、rebuild版は焼きなましが初期設定なので、rebuild版ではまず `let acceptance = Acceptance::HillClimbing;` に変更して試す。
+編集するのは選んだStateの `Move`、`propose_move`、`apply_move`、`undo_move`、`debug_validate`。初期状態の `propose_move = None` では探索は始まらない。入口は `src/bin/local_search_direct.rs` または `local_search_rebuild.rs`。direct / rebuildどちらも山登りが初期設定。まずこのままMoveとundoを確認する。
 
 両binの初期解は、既定ではconstructive_stateの貪欲から作る。道Aの `solve` やビームの結果を使う場合は `initial_output` の生成処理を明示的に接続する。詳しくは[初回ガイドの局所探索への接続](first-contest-guide.md#直接変更する場合-local-search-direct)を参照。
 

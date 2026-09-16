@@ -18,7 +18,7 @@ use problem::{print_answer, read_input, validate_output};
 
 fn main() {
     let input = read_input();
-    let state = solve_greedy(State::new(&input));
+    let state = solve_greedy(&input, State::new(&input));
     let output = state.into_output();
 
     #[cfg(debug_assertions)]

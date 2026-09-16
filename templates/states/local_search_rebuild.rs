@@ -13,7 +13,6 @@ pub struct Parameters {
 /// ParametersからOutputと評価値を毎回再構築し、派生データの更新漏れを防ぐ。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
-    input: Input,
     parameters: Parameters,
     output: Output,
     evaluated_value: i64,
@@ -28,21 +27,20 @@ pub enum Move {
 impl State {
     pub fn new(input: &Input, initial_output: Output) -> Self {
         let mut state = Self {
-            input: input.clone(),
             parameters: Parameters {
                 draft: initial_output,
             },
             output: Output { lines: Vec::new() },
             evaluated_value: 0,
         };
-        state.rebuild();
+        state.rebuild(input);
         state
     }
 
     /// Parametersから、出力全体とスコアを必ず同時に作り直す唯一の経路。
-    fn rebuild(&mut self) {
+    fn rebuild(&mut self, input: &Input) {
         self.output = self.parameters.draft.clone();
-        self.evaluated_value = calculate_score(&self.input, &self.output);
+        self.evaluated_value = calculate_score(input, &self.output);
     }
 
     pub fn into_output(self) -> Output {
@@ -51,33 +49,34 @@ impl State {
 }
 
 impl LocalSearchState for State {
+    type Input = Input;
     type Move = Move;
 
-    fn evaluated_value(&self) -> i64 {
+    fn evaluated_value(&self, _input: &Input) -> i64 {
         self.evaluated_value
     }
 
-    fn propose_move<R: Rng + ?Sized>(&self, _rng: &mut R) -> Option<Self::Move> {
+    fn propose_move<R: Rng + ?Sized>(&self, _input: &Input, _rng: &mut R) -> Option<Self::Move> {
         None
     }
 
-    fn apply_move(&mut self, movement: &Self::Move) {
+    fn apply_move(&mut self, input: &Input, movement: &Self::Move) {
         match movement {
             Move::Noop => {}
         }
-        self.rebuild();
+        self.rebuild(input);
     }
 
-    fn undo_move(&mut self, movement: &Self::Move) {
+    fn undo_move(&mut self, input: &Input, movement: &Self::Move) {
         match movement {
             Move::Noop => {}
         }
-        self.rebuild();
+        self.rebuild(input);
     }
 
-    fn debug_validate(&self) {
+    fn debug_validate(&self, input: &Input) {
         let mut rebuilt = self.clone();
-        rebuilt.rebuild();
+        rebuilt.rebuild(input);
         debug_assert_eq!(self.output, rebuilt.output, "output is stale");
         debug_assert_eq!(
             self.evaluated_value, rebuilt.evaluated_value,
