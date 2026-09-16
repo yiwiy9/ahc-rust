@@ -1,0 +1,8 @@
+/target/
+/tools/target/
+/tools/in/
+/out/
+/results/
+/visualizations/
+/snapshots/
+/submit/

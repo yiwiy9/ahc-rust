@@ -1,0 +1,10 @@
+contest_id = "ahc071"
+score_direction = "maximize"
+score_pattern = 'Score\s*=\s*(-?[0-9]+)'
+# pahcerは `score` という名前付きcaptureと正の整数を前提にする。
+pahcer_score_pattern = '(?m)^\s*Score\s*=\s*(?P<score>\d+)\s*$'
+web_visualizer_url = "https://atcoder.jp/contests/ahc071/tasks/ahc071_a"
+
+# 問題文を読んだら、コンテスト全体の制限時間を秒で記録する。
+# ソルバー内の探索時間とは分け、入力・出力・初期解生成も含めて考える。
+# total_time_limit_seconds = 2.0
