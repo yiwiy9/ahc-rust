@@ -1,18 +1,26 @@
 # 外部・グローバル影響の記録
 
+## 2026-10-18: 一枚の解法テンプレートと操作の統一
+
+- 変更はahc-rust内のテンプレート・CLI・scripts・ガイド。070・071の既存solverソースに差分なし。073のa.rsも作業前のコピーと一致している。
+- 生成・採点・保存・復元の検証は `.tools/template-check-*` / `.tools/workflow-check-*` 内の隔離workspaceで行い、エディタ登録も隔離workspace内へ書き込む。ユーザーのVS Code設定は変更していない。
+- 公式toolsの検証で、既存のCargoキャッシュにある依存アーカイブを通常のregistry cacheへ展開した。通信・グローバルコマンドの導入・toolchainやPATHの変更は行っていない。
+- クリップボードの確認には検証用pbcopyを使い、実際のクリップボードは書き換えていない。既存コンテストへは操作スクリプトとREADMEの修正だけを反映した。
+- この節はローカル環境の変更記録。コミット・公開の時点はGit履歴を参照する。
+
 ## 方針
 
 AHC環境の作成・利用で、既存の `atcoder-rust`、シェル設定、PATH、グローバルCargo/npmパッケージを変更しない。
 
 ## 初期構築時に行ったこと
 
-- `/private/tmp/ahc-workspace` で新規リポジトリを作成した。
+- 一時ディレクトリ内で新規リポジトリを作成した。
 - `ahc-studio` の依存関係はそのリポジトリ内の `node_modules` にのみインストールした。
 - pahcer 0.4.0は `ahc-rust/.tools` にのみインストールする。PATHやグローバルCargo binaryは変更しない。
 - pahcerの初回ビルドはCargoの通常のregistry cacheを利用する。構築確認時、lock済みのyankされた `chacha20 0.10.0` と将来Rustで拒否予定の依存に関する警告が出たが、pahcer 0.4.0自体のビルドとAHC070実行は成功した。
 - npm、Rust、Docker、VS Codeのグローバル設定は変更していない。
 - Rust toolchainを追加インストールしていない。Cargoには `rust-version` を記録し、特定toolchainを自動導入する `rust-toolchain.toml` は置かない。
-- 既存の `/Users/yiwiy/Codes/atcoder/atcoder-rust` は読み取りだけに使用した。
+- 既存のABC側 `atcoder-rust` は読み取りだけに使用した。
 - `practice-algorithm-rust-snippets` を兄弟ディレクトリ `atcoder-lib` へcloneした。構築時revisionは `c308629`。
 - AHC070公式tool ZIPをAtCoderから新リポジトリ内へ取得し、入れ子のCargo workspaceとしてビルドできるよう公式 `tools/Cargo.toml` 末尾へ空の `[workspace]` を追加した。solver/tool本体は変更していない。
 
@@ -23,7 +31,7 @@ AHC環境の作成・利用で、既存の `atcoder-rust`、シェル設定、PA
 - ビルド時に不足していた公式toolsの依存をCargo registry cacheへ取得した。既存キャッシュの削除、グローバルコマンド・toolchainのインストール、PATH・シェル・VS Codeユーザー設定の変更はない。
 - ケース・ビルド成果物・計測結果はintro配下のGit無視対象。登録を戻す場合は追加したコンテストとlinkedProjectsの該当項目だけが対象で、旧環境への復旧作業は不要。Cargoの共有キャッシュは他プロジェクトでも使うため一括削除しない。
 
-最終配置先は `/Users/yiwiy/Codes/atcoder/ahc-workspace`。このディレクトリを削除すれば、今回追加する環境全体を元に戻せる。
+配置先は、このリポジトリと `ahc-studio` を含む親ワークスペース。撤去する場合は必要なコードを退避し、対象のワークスペースを削除する。
 
 pahcerだけ撤去する場合は `ahc-rust/.tools` を削除する。計測履歴は各contestの無視対象 `results/pahcer` にあり、solverコードとは分離されている。
 
@@ -49,5 +57,5 @@ pahcerだけ撤去する場合は `ahc-rust/.tools` を削除する。計測履�
 
 - ABC側の `atcoder-rust/src/lib/src` とAHC側cloneは、全branch/refが同じ `c3086295e850bcbb0ca23bab5c480bfb68f6002c` で、両方のworktreeに独自変更なし。ファイル比較ではABC側だけにある `.gitkeep` 以外一致した。
 - `references/atcoder-lib` を `../../../atcoder-rust/src/lib/src` へ変更。workspace.toml、CLIの既定値、スニペット生成はこの参照口を使う。setup-common-lib.shもcloneせず、既存ABC側へのリンクを設定する。
-- 不要な `/Users/yiwiy/Codes/atcoder/ahc-workspace/atcoder-lib` は `/Users/yiwiy/.Trash/ahc-atcoder-lib-20260916` へ移動。元の配置からは撤去済みで、ゴミ箱から復元できる。ABC側のコード・Git設定・権限は変更していない。
+- 不要になった共通libの別cloneはローカルのゴミ箱へ退避。元の配置からは撤去済みで、ゴミ箱から復元できる。ABC側のコード・Git設定・権限は変更していない。
 - ABC側ソースからAHCのVS Codeスニペットを再生成し、従来の生成結果と差分なし。別cloneを維持する必要はなくなった。スニペットの生成済みJSON自体はAHCリポジトリに残す。

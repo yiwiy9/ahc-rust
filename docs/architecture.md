@@ -1,36 +1,27 @@
 # 構成と境界
 
-```text
-ahc-workspace/
-├── ahc-rust/                 競技だけで完結するGitリポジトリ
-│   ├── crates/ahc-cli/       生成・1 seed実行・計測adapter・保存・export
-│   ├── templates/            新しい問題へコピーする型
-│   ├── contests/ahc070/      問題固有コードと検索用の過去解
-│   └── docs/
-└── ahc-studio/               OBS画面・順位・AI操作のGitリポジトリ
-```
+`ahc-rust` は競技・ローカル採点、別repoの `ahc-studio` は配信を担当する。各contestは独立したCargo workspaceで、Cargo.lockとtargetを閉じ込める。配信環境は確定したresults/latest.jsonを読み、競技コードを変更・起動しない。
 
-`ahc-rust` は単独でコンテスト参加できます。`ahc-studio` は競技コードを起動・変更せず、現在は `results/latest.json` だけを読みます。競技側の `results/events.jsonl` は将来の分析や演出に使える履歴として残します。
+## ソースの正本
 
-各contestも独立したCargo workspaceです。これによりcontestごとの `Cargo.lock` と `target` が分かれ、将来 `contests` や `templates` を別リポジトリへ移してもコードの依存方向は変わりません。
+生成元は `templates/contest/src` の入出力・State・構築エンジンと、`templates/framework`・`templates/states`・`templates/snippets`・`templates/solvers` に分けて管理する。
 
-共通libは `references/atcoder-lib` → ABC側の `atcoder-rust/src/lib/src` を参照する。AHC側に別cloneは置かない。
+newはincludeを再帰展開し、コンテストには次を生成する。
 
-## 問題ごとに編集する場所
+- `src/bin/a.rs`: 型付き入出力、ConstructiveState、貪欲、mainが入る一枚。
+- `samples/*.rs`: a.rsの複製へ貼る、探索ごとの追加部分。
+- `samples/complete/*.rs`: introの入出力とStateまで含む動く完成例。
 
-- `problem.rs`: Input / Output / 読み書き / 正確な得点 / 出力検証
-- `constructive_state.rs`: 構築型のState / Action / 合法手 / 1手 / 評価
-- `local_search_state_*.rs`: 完成解のParameters / Move / 再構築または差分更新
-- `src/bin/*.rs` 冒頭の定数: 幅、反復数、温度、時間
+生成後の正本はコンテスト内の各bin。build/run/exportで元テンプレートから再生成せず、手元の探索関数も自由に編集する。テンプレート更新は既存の解法へ自動反映しない。
 
-## 原則として編集しない場所
+## 探索と状態
 
-- `framework/constructive.rs`: 貪欲の進行
-- `framework/random_search.rs`: 複数の乱択構築
-- `framework/beam*.rs`: 候補の展開と枝刈り
-- `framework/local_search.rs`: 山登り・焼きなましの採否と時間管理
-- 各binのI/Oから探索エンジンを呼ぶ流れ
+ConstructiveStateは貪欲・乱択・ビームで共用する。入力全体をcloneせず、各メソッドへ&Inputを渡す。候補評価と状態生成を分け、ビームでは親・手・評価値で上位を選んだ後に採用Stateだけをcloneする。
 
-多数seedの実行・相対評価・履歴はpahcerへ委譲し、`ahc-cli` は問題ごとの設定生成と共通JSONへの変換を担当します。pahcerに適合しない問題でもbuiltin runnerへ戻れるため、外部ツールが競技継続の必須条件にはなりません。
+局所探索は完成解に対する別StateとMoveを持つ。directは出力を直接変更、rebuildはパラメータから出力と評価をまとめて再構築する。どちらもintroで実際に変化する近傍を実装し、apply/undo・キャッシュ・再構築の整合を検算する。
 
-抽象化の目的は全問題を同じStateで解くことではありません。探索ループのバグと問題固有ロジックのバグを分け、配信中に読む範囲を狭めることです。
+## 実行の入口
+
+公開する日常コマンドはscriptsに統一する。ahc-cliはスクリプトの実装と外部連携用の互換入口として残す。旧addは新しい一枚構成のコピー手順を表示し、既存ソースを変更しない。古い分割APIへ新しいサンプルの一部分だけを注入しない。
+
+共通libの実体はABC側一つ。referencesはその検索用リンク。solverが必要とするコードはcontestへコピーする。

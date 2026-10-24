@@ -1,80 +1,45 @@
 # __CONTEST_ID__
 
-初めてこの問題を解くときは、[初回AHC: 手を動かす手順書](../../docs/first-contest-guide.md) を開き、「編集 → 実行 → 確認 → 修正」の順に進める。
+**編集するのは `src/bin/a.rs` 一枚です。** 入出力・構築State・貪欲の探索が入っています。生成時だけ結合しており、buildやrunで上書きしません。
 
-## 実行の入口
+最初のコードはintro-heuristics Aで動く例です。今回の問題に使うときは、コメントの「変更1〜6」を問題文に合わせます。最初から今回の問題への合法解にはなっていません。
+
+採点設定は必要に応じて `ahc.toml` を変更します。公式得点が小さいほどよい場合の `score_direction` は `minimize`。これは探索内の評価値の符号とは別の設定です。
+
+## いつもの操作
 
 ```sh
-./scripts/build.sh a
 ./scripts/run-one.sh a 0
 ./scripts/debug.sh a 0
 ./scripts/run-all.sh a 10
-./ahc export --solver a --clipboard
+./scripts/save.sh a greedy-v1 10
+./scripts/export.sh a
 ```
 
-`run-all` は追加ツール不要。引数はbin名→seed / 件数の順。
-入力はmainから `&Input` で探索とStateのメソッドへ渡す。Stateに入力全体をコピーしない。詳しくは [エディタ・実行環境](../../docs/environment.md)。
+bin名→seed / 件数の順。run時にビルドするため、事前のbuildは不要です。`./scripts/build.sh a` はビルドだけしたいときに使います。
 
-## 初回の最短ルート
+`save` は採点と保存が終わるまで待ちます。成功表示後に次の案へ進みます。`run-one` / `run-all` だけではソースの版は保存しません。`export` は提出ファイルを保存し、クリップボードにもコピーします。ファイル保存だけなら `./scripts/export.sh a --file-only`。
 
-最初から探索テンプレートを埋める必要はありません。まず次だけ行います。
-
-1. `src/problem.rs` の `Input` / `Output` / `read_input` / `print_answer` を問題文に合わせる
-2. `src/bin/valid.rs` で、とても弱くても**合法な出力**を一つ作る
-3. `./ahc run 0 --solver valid --debug` と可視化で、公式toolsがその出力を受け取ることを確認する
-4. 本命の解を、下の道Aまたは道Bの片方で作る
-
-`tools/`、`target/`、`out/`、`results/`、`submit/` は編集しません。公式toolsまたは自動生成物です。
-
-`valid.rs` はAtCoderへの提出そのものには必須ではありません。ただし初回は、最小の合法解を公式toolsへ渡す練習として必ず通します。
-
-## 本命の解は二択
-
-### 道A: `a.rs` に直接書く
-
-一つのファイルで解を作りたい場合は、`src/bin/a.rs` を自分の `main` と `solve` に書き換えます。`constructive_state.rs`、`greedy.rs`、`framework/` は不要です。最後は `./ahc export --solver a --clipboard` で提出用を作ります。
-
-### 道B: 貪欲テンプレートを使う
-
-解を一手ずつ組み立てる問題では、`src/constructive_state.rs` を編集します。ここへ「途中の解」「次に選べる候補」「1手進める処理」「候補比較用の値」を書きます。
-
-| ファイル | 編集するか |
-| --- | --- |
-| `src/constructive_state.rs` | 編集する |
-| `src/bin/greedy.rs` | 通常は編集しない |
-| `src/framework/constructive.rs` | 編集しない |
-| `src/bin/a.rs` | 通常は編集しない。`greedy.rs` を提出入口にしている |
-
-この道でも実行・提出は `--solver a` でよいです。
-
-## 後回しでよいもの
-
-- `validate_output`: 最小解が通った後に、個数・値域などから追加する
-- `calculate_score`: 探索で候補を比べる前に実装する
-- `./ahc add beam` 等の探索: 貪欲や単純解を可視化して、改善したい失敗が見えてから使う
-- `bench` / `save`: 1ケースが分かってから使う
-
-## 構築テンプレートを選んだ場合の実装順
-
-1. `src/problem.rs` の `Input` / `Output` / `read_input` / `print_answer`
-2. `validate_output` と、可能なら小さい入力で照合できる `calculate_score`
-3. `src/constructive_state.rs` の合法手・1手進める処理・評価値
-4. `src/bin/greedy.rs` で正の得点を作る
-5. 問題の形を見て `./ahc add random-search`、`beam`、`local-search-direct`、`local-search-rebuild` を追加する
-
-`evaluated_value` は常に「大きいほどよい」値にそろえる。公式得点が小さいほどよい問題なら符号を反転する。
-
-## よく使うコマンド
+## 別案を試す
 
 ```sh
-./ahc doctor
-./ahc run 0 --solver greedy
-./ahc bench --solver greedy --cases 10 --threads 4
-./ahc history --rank
-./ahc save greedy --solver greedy --cases 10 --threads 4
-./ahc export --solver greedy --clipboard
+cp -n src/bin/a.rs src/bin/beam.rs
+# samples/beam.rsを末尾へ貼り、mainをコメントどおり変更
+./scripts/run-all.sh beam 10
 ```
 
-`bench` はpahcerで並列実行し、seedごとのローカルbestに対する相対値も保存します。0点・負値が正常な問題やpahcerで扱えない公式toolsでは `--builtin` を付けます。
+手で複製してもCargoが認識するので登録不要です。自作の入出力・Stateは引き継ぎます。[サンプルの使い方](samples/README.md) に乱択・ビーム・焼きなましの手順があります。`samples/complete/` にはintroで動く完成例もあります。
 
-`src/bin/a.rs` は最初の提出入口です。試行錯誤が増えたら名前つきbinを追加し、`solutions/` とスナップショットを検索可能な履歴として残します。
+## 保存・可視化
+
+```sh
+./scripts/list.sh
+./scripts/compare.sh 1 2
+./scripts/restore.sh 1
+./scripts/vis.sh a 0
+./scripts/web.sh
+```
+
+復元前のソースは自動退避します。可視化・ログのパスは実行結果にも表示します。並列比較は `./scripts/run-all.sh a 10 --parallel --threads 4`（pahcerの事前準備が必要）。
+
+詳しくは[当日手順](../../docs/contest-day.md)、[初回ガイド](../../docs/first-contest-guide.md)、[探索ガイド](../../docs/strategy-guide.md)。

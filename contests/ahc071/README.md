@@ -7,7 +7,7 @@
 VS Codeでahc-rustを開き、ターミナルをこのディレクトリに移動する。
 
 ```sh
-cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust/contests/ahc071
+cd contests/ahc071
 ```
 
 | やりたいこと | コマンド |
@@ -15,19 +15,19 @@ cd /Users/yiwiy/Codes/atcoder/ahc-workspace/ahc-rust/contests/ahc071
 | seed 0を実行・採点・可視化 | `./scripts/run-one.sh a 0` |
 | 検算つきで実行 | `./scripts/debug.sh a 0` |
 | seed 0〜9をまとめて採点 | `./scripts/run-all.sh a 10` |
-| 現在の解を名前付きで保存・採点 | `./ahc save greedy-v1 --solver a --cases 10 --builtin` |
-| 保存した解の一覧 | `./ahc list` |
-| 提出用の単一ファイルをコピー | `./ahc export --solver a --clipboard` |
+| 現在の解を名前付きで保存・採点 | `./scripts/save.sh a greedy-v1 10` |
+| 保存した解の一覧 | `./scripts/list.sh` |
+| 提出用の単一ファイルをコピー | `./scripts/export.sh a` |
 
 実行時に差分ビルドするので、毎回buildを別に呼ぶ必要はない。`a` はbin名、末尾はseedまたは件数。run-allはpahcer不要。全体の使い方は [環境ガイド](../../docs/environment.md)。
 
 ## ビジュアライザ・結果を見る
 
 ```sh
-./ahc vis 0 --solver a --open
+./scripts/vis.sh a 0
 ```
 
-先にrun-oneを実行する。debugで生成したHTMLなら `./ahc vis 0 --solver a --debug --open`。
+先にrun-oneを実行する。debugで生成したHTMLなら `./scripts/vis.sh a 0 --debug`。
 
 - 解の出力: `out/a/release/0000.txt`（debug時は `out/a/debug/0000.txt`）
 - stderr・panic: `results/logs/a/release/0000.log` または `results/logs/a/debug/0000.log`

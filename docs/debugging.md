@@ -2,7 +2,7 @@
 
 ## まず見る場所
 
-`./ahc run 0 --debug` はsolverの標準エラーを `results/logs/...` に保存し、失敗時は端末にも表示します。panicでは `RUST_BACKTRACE=1` が有効です。通常出力は解として扱われるため、デバッグ表示は必ず標準エラーへ出します。
+`./scripts/debug.sh a 0` はsolverの標準エラーを `results/logs/...` に保存し、失敗時は端末にも表示します。panicでは `RUST_BACKTRACE=1` が有効です。通常出力は解として扱われるため、デバッグ表示は必ず標準エラーへ出します。
 
 ```rust
 eprintln!("turn={turn} score={score} position={position:?}");

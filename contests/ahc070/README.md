@@ -8,7 +8,7 @@
 - `beam`: 当時試したビームサーチ
 - `sa_improved`: 配信後の改善版（旧環境の最終 `a.rs`）
 
-例: `./ahc run 0 --solver sa_improved`
+例: `./scripts/run-one.sh sa_improved 0`
 
 ## 再開地点
 
@@ -22,13 +22,13 @@
 ## 使い方
 
 ```sh
-./ahc doctor
-./ahc run 0
-./ahc bench --cases 10 --threads 4 --comment contest-end
-./ahc history --rank
-./ahc save rebuild-baseline --cases 10 --threads 4
-./ahc export --clipboard
-./ahc serve
+./scripts/doctor.sh
+./scripts/run-one.sh a 0
+./scripts/run-all.sh a 10 --parallel --threads 4 --comment contest-end
+./scripts/history.sh --rank
+./scripts/save.sh a rebuild-baseline 10
+./scripts/export.sh a
+./scripts/serve.sh
 ```
 
 `a`、`beam`、`sa_improved` を同じ `--cases` と `--threads` で順に計測すると、pahcerの相対スコアとローカル順位で比較できます。時間探索は並列数でも結果が変わるため、比較中は固定します。

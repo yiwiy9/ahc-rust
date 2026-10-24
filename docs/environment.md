@@ -2,7 +2,7 @@
 
 ## 開くフォルダ
 
-VS Codeで **ahc-rustフォルダ単体** を開く。`ahc-rust.code-workspace` も同じ一つのフォルダを開く互換入口になっている。コンテストの追加は `./ahc new ahcNNN`、手動配置後は `./ahc vscode sync`。
+VS Codeで **ahc-rustフォルダ単体** を開く。`ahc-rust.code-workspace` も同じ一つのフォルダを開く互換入口になっている。コンテストの追加は `./scripts/new.sh ahcNNN`、手動配置後は `./scripts/vscode-sync.sh`。
 
 Explorerの配置:
 
@@ -27,7 +27,7 @@ VS Codeの `references/` 経由では読み取り専用。これはエディタ�
 
 スニペットも従来通り `⌃Space` で利用できる。共通lib更新後は `./scripts/sync-vscode-snippets.sh`。自動候補表示を切っているので、候補が勝手に出ないこととrust-analyzerが動かないことは別。
 
-補完が動かなければ `./ahc vscode sync` → VS Codeの `Rust Analyzer: Restart server`。`出力 → Rust Analyzer Language Server` にエラーがないか確認する。保存時はcargo checkを使い、clippyの追加指摘は必要なときに手動実行する。
+補完が動かなければ `./scripts/vscode-sync.sh` → VS Codeの `Rust Analyzer: Restart server`。`出力 → Rust Analyzer Language Server` にエラーがないか確認する。保存時はcargo checkを使い、clippyの追加指摘は必要なときに手動実行する。
 
 ## 普段使うコマンド
 
@@ -38,20 +38,24 @@ VS Codeの `references/` 経由では読み取り専用。これはエディタ�
 ./scripts/run-one.sh a 0
 ./scripts/debug.sh a 0
 ./scripts/run-all.sh a 10
-./ahc export --solver a --clipboard
+./scripts/export.sh a
 ```
 
-各スクリプトはCargoの差分ビルドを使う。変更がなければ再コンパイルしない。`run-one` はreleaseで実行・採点・可視化、`debug` は検算とバックトレースを有効化する。エラーはターミナルと `results/logs/`、解は `out/` に残る（詳細パスは実行表示）。`run-all` はseed 0から順に計測する。`./ahc all --solver a --cases 10 --builtin` も同じ入口。
+各スクリプトはCargoの差分ビルドを使う。変更がなければ再コンパイルしない。`run-one` はreleaseで実行・採点・可視化、`debug` は検算とバックトレースを有効化する。エラーはターミナルと `results/logs/`、解は `out/` に残る（詳細パスは実行表示）。`run-all` はseed 0から順に計測する。
 
-高速な並列比較が必要になったら `./ahc bench --solver a --cases 10 --threads 4`。こちらはpahcerを使う。本番の時間確認は並列計測だけで判断せず、単独のrelease実行でも確認する。
+高速な並列比較が必要になったら `./scripts/run-all.sh a 10 --parallel --threads 4`。こちらはpahcerを使う。本番の時間確認は並列計測だけで判断せず、単独のrelease実行でも確認する。
 
 ## テンプレートの入力とState
 
-`Input` はmainで一つだけ保持し、`solve_greedy(&input, state)` などへ参照で渡す。Stateの各メソッドにも `&Input` が渡る。Stateには途中の解とキャッシュだけを置く。入力全体をコピーする必要はなく、`Input: Clone` の制約もない。
+newは生成元を一度だけ結合し、`src/bin/a.rs`一枚を作る。その後のbuild/runで生成し直さない。proconioの型付き入力、Output、ConstructiveState、貪欲とmainが同じファイルに入る。初期実装はintroで動く例なので、新問題ではコメントの「変更1〜6」を置き換える。
 
-貪欲・乱択・ビームは同じ構築用Stateを使う。局所探索は完成解を変更する別のStateを使うが、初期解は同じ貪欲関数から取得する。direct / rebuildどちらも最初は山登り。Moveとundoを確認してから焼きなましへ切り替える。
+`Input`はmainで一つ保持し、探索やStateへ&Inputを渡す。Stateは部分解とキャッシュだけを持ち、Input: Cloneは不要。文字列化は出力時に行う。
 
-旧コンテストのコードは当時のAPIのまま保存する。新APIのテンプレート追加は旧APIを検出したらコピー前に止める。旧コンテストを復習する場合は当時の実装を使うか、別途API全体を移行する。一部分だけ混ぜない。
+`evaluated_value_after(input, action)`で次の評価値だけを計算し、貪欲・ビームで使う。introの実装は履歴をcloneしない。traitの既定実装はcloneして評価するので、新問題でこれへ戻すと評価用のコピーは残る。debugでは全候補の軽量評価を通常の更新結果と照合する。
+
+別案はbinを複製し、`samples/*.rs`の追加部分を貼る。手動複製した名前もCargoが自動認識する。局所探索は完成解を変更する別Stateと近傍が必要。`samples/complete/`はintroの完成例。探索ループもその場で自由に編集できる。
+
+旧コンテストの解法は自動移行しない。旧APIと新APIの一部だけを混ぜる追加は拒否し、一枚構成の旧add呼び出しはコピー手順を表示するだけにする。
 
 ## 依存ライブラリ
 

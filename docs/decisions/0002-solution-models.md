@@ -5,8 +5,10 @@
 構築型探索と局所探索を別のStateとして扱う。
 
 - `ConstructiveState`: 貪欲、乱択構築、ビームで共用する。
-- `DirectLocalSearchState`: 完成したOutput自体をMoveで変更する。
-- `RebuildLocalSearchState`: Parametersだけを変更し、Outputを必ず再構築する。
+- direct型: 完成したOutput自体をMoveで変更する。
+- rebuild型: Parametersだけを変更し、Outputを必ず再構築する。
+
+direct / rebuildは状態の持ち方を表す名前で、現在のtrait名は両方とも `LocalSearchState`。新規生成後の編集場所と追加手順は [一枚の解法の方針](0003-single-file-solvers.md) と [当日手順](../contest-day.md) を参照する。
 
 ## 防ぐバグ
 

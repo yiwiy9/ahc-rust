@@ -38,6 +38,9 @@ enum Commands {
         contest_id: String,
         #[arg(long)]
         tools_url: Option<String>,
+        /// Use the bundled intro-heuristics example and tools without downloading.
+        #[arg(long, conflicts_with = "tools_url")]
+        example: bool,
     },
     /// Download or replace the official tools for an existing contest.
     Tools {
@@ -49,7 +52,7 @@ enum Commands {
         #[command(subcommand)]
         command: VscodeCommand,
     },
-    /// Add a solver scaffold without modifying existing solvers.
+    /// Show the copy-and-paste workflow for an additional solver.
     Add {
         #[arg(value_enum)]
         template: SolverTemplate,
@@ -389,7 +392,14 @@ fn main() -> Result<()> {
         Commands::New {
             contest_id,
             tools_url,
-        } => new_contest(&root, &contest_id, tools_url.as_deref()),
+            example,
+        } => {
+            if example {
+                new_example(&root, &contest_id)
+            } else {
+                new_contest(&root, &contest_id, tools_url.as_deref())
+            }
+        }
         Commands::Tools { url } => {
             let contest = resolve_contest(&root, cli.contest.as_deref())?;
             let config = load_contest_config(&contest)?;
@@ -717,7 +727,7 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
             })?;
             if !started {
                 bail!(
-                    "contest {contest_id} has not started, so no contest workspace was created.\nRun ./ahc new {contest_id} after the contest begins."
+                    "contest {contest_id} has not started, so no contest workspace was created.\nRun ./scripts/new.sh {contest_id} after the contest begins."
                 );
             }
             match discover_tools_url(contest_id) {
@@ -728,9 +738,9 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
                     eprintln!("Warning: official tools URL was not found automatically.");
                     eprintln!("Created the contest workspace without official tools.");
                     eprintln!("Copy the official tools.zip URL from the problem page, then run:");
-                    eprintln!("  cd contests/{contest_id} && ./ahc tools --url <URL>");
+                    eprintln!("  cd contests/{contest_id} && ./scripts/tools.sh --url <URL>");
                     println!("Created: {}", destination.display());
-                    println!("Next: cd contests/{contest_id} && ./ahc tools --url <URL>");
+                    println!("Next: cd contests/{contest_id} && ./scripts/tools.sh --url <URL>");
                     return Ok(());
                 }
             }
@@ -747,14 +757,136 @@ fn new_contest(root: &Path, contest_id: &str, tools_url: Option<&str>) -> Result
     println!("Official tools installed from {url}");
 
     println!("Created: {}", destination.display());
-    println!("Next: cd contests/{contest_id} && ./ahc doctor");
+    println!("Next: cd contests/{contest_id} && ./scripts/doctor.sh");
     Ok(())
 }
 
 fn create_contest_scaffold(root: &Path, contest_id: &str, destination: &Path) -> Result<()> {
+    if destination.exists() {
+        bail!("contest already exists: {}", destination.display());
+    }
     let template = root.join("templates/contest");
-    copy_tree(&template, destination)?;
-    replace_in_tree(destination, "__CONTEST_ID__", contest_id)
+    // Render before creating anything. Broken template includes leave no partial workspace.
+    let mut sources = vec![(
+        "src/bin/a.rs".to_string(),
+        render_template(&template.join("src/bin/a.rs"))?,
+    )];
+    for solver in [
+        "beam",
+        "beam_fast",
+        "random_search",
+        "local_search_direct",
+        "local_search_rebuild",
+    ] {
+        sources.push((
+            format!("samples/{solver}.rs"),
+            render_template(&root.join(format!("templates/snippets/{solver}.rs")))?,
+        ));
+        sources.push((
+            format!("samples/complete/{solver}.rs"),
+            render_template(&root.join(format!("templates/solvers/{solver}.rs")))?,
+        ));
+    }
+    // Source fragments are for maintenance only; contestants edit the expanded a.rs.
+    create_parent(destination)?;
+    // Create exclusively, including when another process starts the same contest concurrently.
+    fs::create_dir(destination)?;
+    let result = (|| -> Result<()> {
+        for entry in fs::read_dir(&template)? {
+            let entry = entry?;
+            if entry.file_name() == "src" {
+                continue;
+            }
+            let target = destination.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_tree(&entry.path(), &target)?;
+            } else if entry.file_type()?.is_file() {
+                fs::copy(entry.path(), target)?;
+            }
+        }
+        for (relative, source) in sources {
+            let path = destination.join(relative);
+            create_parent(&path)?;
+            fs::write(path, source)?;
+        }
+        replace_in_tree(destination, "__CONTEST_ID__", contest_id)
+    })();
+    if result.is_err() {
+        fs::remove_dir_all(destination).ok();
+    }
+    result
+}
+
+fn render_template(path: &Path) -> Result<String> {
+    let source = expand_includes(path, &mut Vec::new())?;
+    // Remove maintenance boundaries and this machine's absolute paths.
+    let boundaries = Regex::new(r"(?m)^\s*// (?:BEGIN|END) include:.*\n?")?;
+    let source = boundaries.replace_all(&source, "").into_owned();
+    let mut child = match Command::new("rustfmt")
+        .args(["--edition", "2021", "--emit", "stdout"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(source),
+        Err(error) => return Err(error).context("failed to start rustfmt"),
+    };
+    // Read stdout concurrently: full examples can exceed a pipe's capacity.
+    let mut stdin = child.stdin.take().unwrap();
+    let writer = std::thread::spawn(move || stdin.write_all(source.as_bytes()));
+    let output = child.wait_with_output()?;
+    writer
+        .join()
+        .map_err(|_| anyhow!("template writer panicked"))??;
+    if !output.status.success() {
+        bail!(
+            "template formatting failed for {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8(output.stdout).context("rustfmt output was not UTF-8")
+}
+
+fn new_example(root: &Path, contest_id: &str) -> Result<()> {
+    validate_contest_id(contest_id)?;
+    let destination = root.join("contests").join(contest_id);
+    let tools = root.join("contests/intro-heuristics/tools");
+    if !tools.join("Cargo.toml").is_file() {
+        bail!("bundled intro-heuristics tools were not found");
+    }
+    create_contest_scaffold(root, contest_id, &destination)?;
+    let installed = (|| -> Result<()> {
+        let target = destination.join("tools");
+        fs::create_dir_all(&target)?;
+        copy_tree(&tools.join("src"), &target.join("src"))?;
+        for name in ["Cargo.toml", "Cargo.lock", "README.md", "seeds.txt"] {
+            if tools.join(name).is_file() {
+                fs::copy(tools.join(name), target.join(name))?;
+            }
+        }
+        ensure_standalone_tools_manifest(&target)?;
+        let config_path = destination.join("ahc.toml");
+        let config = fs::read_to_string(&config_path)?.replace(
+            &format!("https://atcoder.jp/contests/{contest_id}/tasks/{contest_id}_a"),
+            "https://img.atcoder.jp/intro-heuristics/vis.html?lang=ja",
+        );
+        fs::write(config_path, config)?;
+        Ok(())
+    })();
+    if let Err(error) = installed {
+        fs::remove_dir_all(&destination).ok();
+        return Err(error).context("example tools could not be copied; workspace was removed");
+    }
+    register_vscode_linked_projects(root)?;
+    println!(
+        "Created intro-heuristics example: {}",
+        destination.display()
+    );
+    println!("Next: cd contests/{contest_id} && ./scripts/run-one.sh a 0");
+    Ok(())
 }
 
 // VS Code ではルートのCLI workspaceと各コンテストが別々のCargo projectである。
@@ -807,7 +939,7 @@ fn install_tools_for_contest(contest: &Path, contest_id: &str, url: Option<&str>
         Some(value) => value.to_string(),
         None => discover_tools_url(contest_id).map_err(|_| {
             anyhow!(
-                "official tools URL was not found automatically.\nCopy the official tools.zip URL from the problem page, then run:\n  ./ahc tools --url <URL>"
+                "official tools URL was not found automatically.\nCopy the official tools.zip URL from the problem page, then run:\n  ./scripts/tools.sh --url <URL>"
             )
         })?,
     };
@@ -968,7 +1100,20 @@ fn locate_tools_root(extract_path: &Path) -> Result<PathBuf> {
     bail!("could not locate tools/Cargo.toml in the downloaded archive")
 }
 
-fn add_solver(root: &Path, contest: &Path, template: SolverTemplate) -> Result<()> {
+fn add_solver(_root: &Path, contest: &Path, template: SolverTemplate) -> Result<()> {
+    if contest.join("samples/beam.rs").is_file() {
+        let name = match template {
+            SolverTemplate::Beam => "beam",
+            SolverTemplate::BeamFast => "beam_fast",
+            SolverTemplate::RandomSearch => "random_search",
+            SolverTemplate::LocalSearchDirect => "local_search_direct",
+            SolverTemplate::LocalSearchRebuild => "local_search_rebuild",
+        };
+        println!("Copy src/bin/a.rs to src/bin/{name}.rs, paste samples/{name}.rs at the end, and update main as shown in the sample.");
+        println!("Run: ./scripts/run-one.sh {name} 0");
+        println!("No files were changed. See samples/README.md for working complete examples.");
+        return Ok(());
+    }
     if !contest.join("src/framework/constructive.rs").is_file() {
         bail!("このコンテストには新規生成用の構築テンプレートがありません。既存コードは変更していません。過去の完成例には当時の実装を使ってください。");
     }
@@ -982,67 +1127,15 @@ fn add_solver(root: &Path, contest: &Path, template: SolverTemplate) -> Result<(
             bail!("旧版の探索APIです: {}。既存コードは変更していません。新テンプレートは別の新規コンテストで使うか、Input引数を含むAPI全体を明示的に移行してください。", path.display());
         }
     }
-    let mappings: &[(&str, &str)] = match template {
-        SolverTemplate::RandomSearch => &[
-            (
-                "framework/random_search.rs",
-                "src/framework/random_search.rs",
-            ),
-            ("solvers/random_search.rs", "src/bin/random_search.rs"),
-        ],
-        SolverTemplate::Beam => &[
-            ("framework/beam.rs", "src/framework/beam.rs"),
-            ("solvers/beam.rs", "src/bin/beam.rs"),
-        ],
-        SolverTemplate::BeamFast => &[
-            ("framework/beam_fast.rs", "src/framework/beam_fast.rs"),
-            ("solvers/beam_fast.rs", "src/bin/beam_fast.rs"),
-        ],
-        SolverTemplate::LocalSearchDirect => &[
-            ("framework/local_search.rs", "src/framework/local_search.rs"),
-            (
-                "states/local_search_direct.rs",
-                "src/local_search_state_direct.rs",
-            ),
-            (
-                "solvers/local_search_direct.rs",
-                "src/bin/local_search_direct.rs",
-            ),
-        ],
-        SolverTemplate::LocalSearchRebuild => &[
-            ("framework/local_search.rs", "src/framework/local_search.rs"),
-            (
-                "states/local_search_rebuild.rs",
-                "src/local_search_state_rebuild.rs",
-            ),
-            (
-                "solvers/local_search_rebuild.rs",
-                "src/bin/local_search_rebuild.rs",
-            ),
-        ],
-    };
-
-    for (source, destination) in mappings {
-        let source = root.join("templates").join(source);
-        let destination = contest.join(destination);
-        if destination.exists() {
-            println!("Kept existing: {}", destination.display());
-            continue;
+    if matches!(template, SolverTemplate::Beam | SolverTemplate::BeamFast) {
+        let framework = fs::read_to_string(contest.join("src/framework/constructive.rs"))?;
+        if !framework.contains("fn evaluated_value_after(")
+            || !framework.contains("fn keep_best_actions<")
+        {
+            bail!("このコンテストの構築エンジンは軽量評価に未対応です。既存コードは変更していません。新しいbeamは新規コンテストで使うか、src/framework/constructive.rsを含めて明示的に移行してください。");
         }
-        if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::copy(&source, &destination).with_context(|| {
-            format!(
-                "failed to copy template {} to {}",
-                source.display(),
-                destination.display()
-            )
-        })?;
-        println!("Added: {}", destination.display());
     }
-    println!("Existing solver files were not modified.");
-    Ok(())
+    bail!("Split-file solver generation has been retired. Copy src/bin/a.rs to a new bin and paste the matching sample from samples/. Existing files were not modified.")
 }
 
 fn build(contest: &Path, _config: &ContestConfig, solver: &str, debug: bool) -> Result<BuiltTools> {
@@ -1391,14 +1484,16 @@ fn benchmark_pahcer(
     let pahcer = pahcer_binary(root);
     if !pahcer.is_file() {
         bail!(
-            "workspace-local pahcer was not found\nRun: {}/scripts/install-pahcer.sh\nOr use: ./ahc bench --builtin",
+            "workspace-local pahcer was not found\nRun: {}/scripts/install-pahcer.sh\nOr use: ./scripts/run-all.sh {solver} {cases}",
             root.display()
         );
     }
 
     let tools = build(contest, config, solver, false)?;
     if tools.tester.is_none() && tools.visualizer.is_none() {
-        bail!("no official tester or visualizer was found; use ./ahc bench --builtin");
+        bail!(
+            "no official tester or visualizer was found; use ./scripts/run-all.sh {solver} {cases}"
+        );
     }
 
     let pahcer_root = contest.join("results/pahcer");
@@ -1800,7 +1895,7 @@ fn show_pahcer_history(root: &Path, contest: &Path, rank: bool, number: usize) -
     }
     let config = contest.join("results/pahcer/config.toml");
     if !config.is_file() {
-        bail!("pahcer history was not found; run ./ahc bench first");
+        bail!("pahcer history was not found; run ./scripts/run-all.sh a 10 --parallel first");
     }
     let mut command = Command::new(pahcer);
     command
@@ -2021,8 +2116,9 @@ fn show_visualization(
 ) -> Result<()> {
     let path = visualization_path(contest, solver, seed, debug);
     if !path.is_file() {
+        let command = if debug { "debug" } else { "run-one" };
         bail!(
-            "visualization was not found: {}\nRun ./ahc run {seed} --solver {solver} first.",
+            "visualization was not found: {}\nRun ./scripts/{command}.sh {solver} {seed} first.",
             path.display()
         );
     }
@@ -2271,6 +2367,82 @@ mod tests {
     use super::*;
 
     #[test]
+    fn missing_visualization_guides_to_the_matching_public_script() {
+        let directory =
+            env::temp_dir().join(format!("ahc-missing-vis-test-{}", std::process::id()));
+        for (debug, command) in [(false, "run-one"), (true, "debug")] {
+            let error = show_visualization(&directory, "beam", 3, debug, false).unwrap_err();
+            assert!(error
+                .to_string()
+                .contains(&format!("./scripts/{command}.sh beam 3")));
+        }
+    }
+
+    #[test]
+    fn failed_example_install_leaves_no_workspace_and_can_be_retried() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let directory =
+            env::temp_dir().join(format!("ahc-example-failure-test-{}", std::process::id()));
+        copy_tree(&root.join("templates"), &directory.join("templates")).unwrap();
+        let tools = directory.join("contests/intro-heuristics/tools");
+        fs::create_dir_all(tools.join("src")).unwrap();
+        fs::write(tools.join("Cargo.toml"), [0xff]).unwrap();
+        assert!(new_example(&directory, "practice").is_err());
+        assert!(!directory.join("contests/practice").exists());
+        fs::write(tools.join("Cargo.toml"), "[workspace]\n").unwrap();
+        new_example(&directory, "practice").unwrap();
+        assert!(directory.join("contests/practice/src/bin/a.rs").is_file());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn generated_solvers_are_single_files_and_existing_sources_are_never_overwritten() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let directory =
+            env::temp_dir().join(format!("ahc-single-file-test-{}", std::process::id()));
+        create_contest_scaffold(root, "intro-test", &directory).unwrap();
+        let source = fs::read_to_string(directory.join("src/bin/a.rs")).unwrap();
+        assert!(!source.contains("include!("));
+        assert!(source.contains("proconio::input"));
+        assert!(source.contains("fn evaluated_value_after("));
+        assert!(!directory.join("src/problem.rs").exists());
+        assert!(!directory.join("src/bin/greedy.rs").exists());
+        for name in [
+            "beam",
+            "random_search",
+            "local_search_direct",
+            "local_search_rebuild",
+        ] {
+            for relative in [
+                format!("samples/{name}.rs"),
+                format!("samples/complete/{name}.rs"),
+            ] {
+                assert!(!fs::read_to_string(directory.join(relative))
+                    .unwrap()
+                    .contains("include!("));
+            }
+        }
+        fs::write(
+            directory.join("src/bin/a.rs"),
+            format!("{source}\n// my contest change\n"),
+        )
+        .unwrap();
+        let before = tree_fingerprint(&directory).unwrap();
+        assert!(create_contest_scaffold(root, "intro-test", &directory).is_err());
+        add_solver(root, &directory, SolverTemplate::Beam).unwrap();
+        assert_eq!(tree_fingerprint(&directory).unwrap(), before);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn old_search_api_is_rejected_before_any_file_is_added() {
         let directory = env::temp_dir().join(format!("ahc-old-api-test-{}", std::process::id()));
         fs::create_dir_all(directory.join("src/framework")).unwrap();
@@ -2282,6 +2454,25 @@ mod tests {
         let before = tree_fingerprint(&directory).unwrap();
         assert!(add_solver(Path::new("unused"), &directory, SolverTemplate::Beam).is_err());
         assert_eq!(tree_fingerprint(&directory).unwrap(), before);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn beam_requires_matching_evaluation_api_before_adding_files() {
+        let directory =
+            env::temp_dir().join(format!("ahc-old-preview-test-{}", std::process::id()));
+        fs::create_dir_all(directory.join("src/framework")).unwrap();
+        fs::write(
+            directory.join("src/framework/constructive.rs"),
+            "pub trait ConstructiveState: Clone { type Input; type Action; }",
+        )
+        .unwrap();
+        let before = tree_fingerprint(&directory).unwrap();
+        for template in [SolverTemplate::Beam, SolverTemplate::BeamFast] {
+            let error = add_solver(Path::new("unused"), &directory, template).unwrap_err();
+            assert!(error.to_string().contains("軽量評価に未対応"));
+            assert_eq!(tree_fingerprint(&directory).unwrap(), before);
+        }
         fs::remove_dir_all(directory).unwrap();
     }
 

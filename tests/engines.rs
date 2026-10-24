@@ -4,19 +4,19 @@ use rand_pcg::Pcg64Mcg;
 
 mod framework {
     pub mod constructive {
-        include!("../src/framework/constructive.rs");
+        include!("framework/constructive.rs");
     }
     pub mod beam {
-        include!("../src/framework/beam.rs");
+        include!("framework/beam.rs");
     }
     pub mod beam_fast {
-        include!("../src/framework/beam_fast.rs");
+        include!("framework/beam_fast.rs");
     }
     pub mod random_search {
-        include!("../src/framework/random_search.rs");
+        include!("framework/random_search.rs");
     }
     pub mod local_search {
-        include!("../src/framework/local_search.rs");
+        include!("framework/local_search.rs");
         pub fn fixed_budget() -> SearchBudget {
             SearchBudget {
                 started_at: std::time::Instant::now(),
@@ -95,6 +95,128 @@ fn construction_engines_share_non_clone_input() {
     );
 }
 
+struct PreviewInput {
+    clones: std::cell::Cell<usize>,
+    depth: usize,
+    branching: usize,
+}
+
+struct PreviewState<'a> {
+    input: &'a PreviewInput,
+    path: Vec<usize>,
+    score: i64,
+    incorrect_preview: bool,
+}
+
+impl Clone for PreviewState<'_> {
+    fn clone(&self) -> Self {
+        self.input.clones.set(self.input.clones.get() + 1);
+        Self {
+            input: self.input,
+            path: self.path.clone(),
+            score: self.score,
+            incorrect_preview: self.incorrect_preview,
+        }
+    }
+}
+
+impl framework::constructive::ConstructiveState for PreviewState<'_> {
+    type Input = PreviewInput;
+    type Action = usize;
+    fn is_complete(&self, input: &PreviewInput) -> bool {
+        self.path.len() == input.depth
+    }
+    fn legal_actions(&self, input: &PreviewInput) -> Vec<usize> {
+        (0..input.branching).collect()
+    }
+    fn advance(&mut self, _: &PreviewInput, action: &usize) {
+        self.score += *action as i64;
+        self.path.push(*action);
+    }
+    fn evaluated_value(&self, _: &PreviewInput) -> i64 {
+        self.score
+    }
+    fn evaluated_value_after(&self, _: &PreviewInput, action: &usize) -> i64 {
+        // 不一致テストでは棄却される低評価の候補だけを意図的に壊す。
+        self.score + *action as i64
+            - if self.incorrect_preview && *action == 0 {
+                1000
+            } else {
+                0
+            }
+    }
+}
+
+fn preview_state(input: &PreviewInput, incorrect_preview: bool) -> PreviewState<'_> {
+    PreviewState {
+        input,
+        path: Vec::new(),
+        score: 0,
+        incorrect_preview,
+    }
+}
+
+#[test]
+fn lightweight_evaluation_preserves_the_best_complete_path() {
+    let input = PreviewInput {
+        clones: std::cell::Cell::new(0),
+        depth: 4,
+        branching: 50,
+    };
+    let greedy = framework::constructive::solve_greedy(&input, preview_state(&input, false));
+    let beam = framework::beam::solve_beam(&input, preview_state(&input, false), 3);
+    let fast = framework::beam_fast::solve_beam_fast(&input, preview_state(&input, false), 3);
+    for state in [greedy, beam, fast] {
+        assert_eq!(state.path, vec![49; 4]);
+        assert_eq!(state.score, 196);
+    }
+}
+
+#[test]
+#[cfg(not(debug_assertions))]
+fn release_copies_only_retained_states_with_lightweight_evaluation() {
+    let input = PreviewInput {
+        clones: std::cell::Cell::new(0),
+        depth: 4,
+        branching: 50,
+    };
+    framework::constructive::solve_greedy(&input, preview_state(&input, false));
+    assert_eq!(input.clones.get(), 0);
+    framework::beam::solve_beam(&input, preview_state(&input, false), 3);
+    assert_eq!(input.clones.replace(0), 4 * 3);
+    framework::beam_fast::solve_beam_fast(&input, preview_state(&input, false), 3);
+    // 最初の状態の保持に1回、その後は各層の採用3状態だけ。
+    assert_eq!(input.clones.get(), 1 + 4 * 3);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "evaluated_value_after must match")]
+fn debug_checks_lightweight_scores_even_for_discarded_actions() {
+    let input = PreviewInput {
+        clones: std::cell::Cell::new(0),
+        depth: 1,
+        branching: 2,
+    };
+    framework::beam::solve_beam(&input, preview_state(&input, true), 1);
+}
+
+#[test]
+fn beam_ties_keep_the_same_generation_order_in_both_engines() {
+    let input = Input {
+        rewards: vec![0, 0, 0],
+        target: 0,
+    };
+    let initial = Construction {
+        actions: vec![],
+        score: 0,
+    };
+    let beam = framework::beam::solve_beam(&input, initial.clone(), 3);
+    let fast = framework::beam_fast::solve_beam_fast(&input, initial, 3);
+    assert_eq!(beam.actions, vec![0, 0, 0]);
+    assert_eq!(beam, fast);
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct Local {
     parameter: i64,
@@ -108,8 +230,12 @@ struct StaleOutput(Local);
 impl framework::local_search::LocalSearchState for StaleOutput {
     type Input = Input;
     type Move = i64;
-    fn evaluated_value(&self, _: &Input) -> i64 { self.0.score }
-    fn propose_move<R: Rng + ?Sized>(&self, _: &Input, _: &mut R) -> Option<i64> { Some(1) }
+    fn evaluated_value(&self, _: &Input) -> i64 {
+        self.0.score
+    }
+    fn propose_move<R: Rng + ?Sized>(&self, _: &Input, _: &mut R) -> Option<i64> {
+        Some(1)
+    }
     fn apply_move(&mut self, input: &Input, movement: &i64) {
         self.0.parameter += movement;
         // 意図的なバグ: スコアだけ更新し、解の再構築を忘れる。
@@ -119,18 +245,33 @@ impl framework::local_search::LocalSearchState for StaleOutput {
         self.0.parameter -= movement;
         self.0.rebuild(input);
     }
-    fn debug_validate(&self, input: &Input) { self.0.debug_validate(input); }
+    fn debug_validate(&self, input: &Input) {
+        self.0.debug_validate(input);
+    }
 }
 
 #[test]
 #[cfg(debug_assertions)]
 #[should_panic(expected = "assertion")]
 fn debug_search_detects_score_updated_but_output_stale() {
-    use framework::local_search::{optimize, Acceptance, fixed_budget};
-    let input = Input { rewards: vec![], target: 3 };
-    let state = StaleOutput(Local { parameter: 0, output: 0, score: -6 });
+    use framework::local_search::{fixed_budget, optimize, Acceptance};
+    let input = Input {
+        rewards: vec![],
+        target: 3,
+    };
+    let state = StaleOutput(Local {
+        parameter: 0,
+        output: 0,
+        score: -6,
+    });
     let mut rng = Pcg64Mcg::seed_from_u64(42);
-    optimize(&input, state, Acceptance::HillClimbing, fixed_budget(), &mut rng);
+    optimize(
+        &input,
+        state,
+        Acceptance::HillClimbing,
+        fixed_budget(),
+        &mut rng,
+    );
 }
 impl Local {
     fn rebuild(&mut self, input: &Input) {

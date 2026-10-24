@@ -59,7 +59,17 @@ class WorkflowHelpers(unittest.TestCase):
                 ('build.sh', [], ['build', '--solver', 'a']),
                 ('run-one.sh', ['beam', '12'], ['run', '12', '--solver', 'beam']),
                 ('run-all.sh', ['beam', '20'], ['bench', '--solver', 'beam', '--cases', '20', '--builtin']),
+                ('run-all.sh', ['beam', '20', '--parallel', '--threads', '4'], ['bench', '--solver', 'beam', '--cases', '20', '--threads', '4']),
                 ('debug.sh', ['a', '3'], ['run', '3', '--solver', 'a', '--debug']),
+                ('save.sh', ['beam', 'first', '2'], ['save', 'first', '--solver', 'beam', '--cases', '2', '--builtin']),
+                ('export.sh', [], ['export', '--solver', 'a', '--clipboard']),
+                ('export.sh', ['beam', '--file-only'], ['export', '--solver', 'beam']),
+                ('export.sh', ['--file-only'], ['export', '--solver', 'a']),
+                ('list.sh', [], ['list']),
+                ('restore.sh', ['2'], ['restore', '2']),
+                ('compare.sh', ['1', '2'], ['compare', '1', '2']),
+                ('vis.sh', ['beam', '3'], ['vis', '3', '--solver', 'beam', '--open']),
+                ('tools.sh', ['--url', 'https://example.invalid/tools.zip'], ['tools', '--url', 'https://example.invalid/tools.zip']),
             ]
             for name, args, expected in cases:
                 result = subprocess.run([str(root / 'scripts' / name), *args], cwd='/', capture_output=True, text=True, check=True)

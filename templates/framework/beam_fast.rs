@@ -1,4 +1,6 @@
-use super::constructive::ConstructiveState;
+use crate::framework::constructive::{
+    evaluate_action, keep_best_actions, ConstructiveState, ScoredAction,
+};
 
 #[derive(Debug)]
 struct History<A> {
@@ -13,7 +15,8 @@ struct Candidate<S> {
 }
 
 /// 親ポインタで手順を記録し、最良手順を初期状態から再生する版。
-/// Stateのcloneは残る。長い出力をStateに保持したままでは複製コストは減らない。
+/// 採用候補だけStateと履歴を作り、棄却した候補の履歴は保存しない。
+/// evaluated_value_afterを実装しなければ、評価用のStateのcloneは残る。
 /// 通常版より速いとは限らないので、Stateを軽量化した上で実測して選ぶ。
 pub fn solve_beam_fast<S: ConstructiveState>(input: &S::Input, initial: S, beam_width: usize) -> S {
     assert!(beam_width > 0);
@@ -28,35 +31,40 @@ pub fn solve_beam_fast<S: ConstructiveState>(input: &S::Input, initial: S, beam_
 
     while !beam[0].state.is_complete(input) {
         let mut candidates = Vec::with_capacity(beam.len() * 8);
-        for candidate in &beam {
+        for (parent, candidate) in beam.iter().enumerate() {
             for action in candidate.state.legal_actions(input) {
-                let mut next = candidate.state.clone();
-                next.advance(input, &action);
-                #[cfg(debug_assertions)]
-                next.debug_validate(input);
-                let history_id = history.len();
-                history.push(History {
-                    parent: Some(candidate.history_id),
-                    action: Some(action),
-                });
-                candidates.push(Candidate {
-                    state: next,
-                    history_id,
+                let value = evaluate_action(input, &candidate.state, &action);
+                candidates.push(ScoredAction {
+                    parent,
+                    action,
+                    value,
+                    order: candidates.len(),
                 });
             }
         }
         assert!(!candidates.is_empty(), "beam search has no candidate");
-        candidates.sort_unstable_by_key(|candidate| {
-            std::cmp::Reverse(candidate.state.evaluated_value(input))
-        });
-        candidates.truncate(beam_width);
-        beam = candidates;
+        keep_best_actions(&mut candidates, beam_width);
+        let mut next_beam = Vec::with_capacity(candidates.len());
+        for candidate in candidates {
+            let parent = &beam[candidate.parent];
+            let mut next = parent.state.clone();
+            next.advance(input, &candidate.action);
+            #[cfg(debug_assertions)]
+            next.debug_validate(input);
+            let history_id = history.len();
+            history.push(History {
+                parent: Some(parent.history_id),
+                action: Some(candidate.action),
+            });
+            next_beam.push(Candidate {
+                state: next,
+                history_id,
+            });
+        }
+        beam = next_beam;
     }
 
-    let best = beam
-        .into_iter()
-        .max_by_key(|candidate| candidate.state.evaluated_value(input))
-        .unwrap();
+    let best = beam.into_iter().next().unwrap();
     let mut reversed = Vec::new();
     let mut cursor = best.history_id;
     while let Some(parent) = history[cursor].parent {
@@ -67,6 +75,8 @@ pub fn solve_beam_fast<S: ConstructiveState>(input: &S::Input, initial: S, beam_
     let mut result = initial;
     for action in reversed.into_iter().rev() {
         result.advance(input, &action);
+        #[cfg(debug_assertions)]
+        result.debug_validate(input);
     }
     result
 }

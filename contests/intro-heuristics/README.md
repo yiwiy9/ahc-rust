@@ -20,17 +20,17 @@
 
 ```sh
 cd contests/intro-heuristics
-./ahc run 0 --solver beam_search
-./ahc run 0 --solver local_search
-./ahc run 0 --solver local_search_fast
-./ahc bench --solver local_search --cases 10 --threads 4
-./ahc history --rank
-./ahc save local_search --solver local_search --cases 10 --threads 4
-./ahc export --solver local_search --clipboard
-./ahc web --open
+./scripts/run-one.sh beam_search 0
+./scripts/run-one.sh local_search 0
+./scripts/run-one.sh local_search_fast 0
+./scripts/run-all.sh local_search 10 --parallel --threads 4
+./scripts/history.sh --rank
+./scripts/save.sh local_search local-search 10
+./scripts/export.sh local_search
+./scripts/web.sh
 ```
 
-`--solver`にはA問題の3つのファイル名（拡張子なし）を指定します。出力・ログ・比較結果・保存先は他のコンテストと同じです。pahcer未導入時は `./ahc bench --builtin --solver local_search --cases 10` も使えます。
+スクリプトの最初の引数にはA問題の3つのファイル名（拡張子なし）を指定します。出力・ログ・比較結果・保存先は他のコンテストと同じです。pahcer未導入時は `./scripts/run-all.sh local_search 10` も使えます。
 
 公式toolsのソース・依存ロック・seed一覧は旧環境から引き継ぎ、実行に必要なケースは新ハーネスが初回に生成します。cargo-compete設定、旧scripts、ahc-kit、過去の計測結果は持ち込んでいません。tools/Cargo.tomlに独立workspaceの宣言を追加した以外、公式ツールのコードは変更していません。
 

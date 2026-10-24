@@ -1,4 +1,6 @@
 contest_id = "__CONTEST_ID__"
+# 公式得点の比較方向。小さいほどよい問題なら"minimize"へ変更する。
+# これは計測・保存の順位用。Stateの探索評価は別に「大きいほどよい」へ統一する。
 score_direction = "maximize"
 score_pattern = 'Score\s*=\s*(-?[0-9]+)'
 # pahcerは `score` という名前付きcaptureと正の整数を前提にする。

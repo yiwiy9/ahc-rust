@@ -37,10 +37,10 @@
 
 まず、現在解からランダムMoveを数千回試し、採用せず元へ戻しながら負の `delta = next_value - current_value` の絶対値を記録します。中央値、上位10%、最大付近を見ます。
 
-局所探索テンプレートでは次の実行で、標準エラーとlogへ中央値、上位10%、温度候補を出します。
+samples/local_search_*.rsを貼ったsa.rsでは、次の実行で、標準エラーとlogへ中央値、上位10%、温度候補を出します。
 
 ```sh
-AHC_SAMPLE_DELTAS=1 AHC_ITERATIONS=10000 ./ahc run 0 --solver local_search_rebuild --debug --no-vis
+AHC_SAMPLE_DELTAS=1 AHC_ITERATIONS=10000 ./scripts/debug.sh sa 0 --no-vis
 ```
 
 - 開始温度: 典型的な改悪を約50〜80%受け入れる値
